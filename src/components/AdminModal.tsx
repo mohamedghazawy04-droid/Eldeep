@@ -348,7 +348,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
     const qtyNumber = parseInt(stockQuantity, 10);
     const parsedPrice = parseFloat(price) || 0;
-    const calculatedPoints = parseInt(points, 10) || Math.max(10, Math.round(parsedPrice * 10));
+    const calculatedPoints = points ? parseFloat(points) : Math.max(0.1, Number((parsedPrice / 100).toFixed(1)));
 
     // If Editing Existing Product
     if (editingProductId) {

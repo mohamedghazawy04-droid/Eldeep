@@ -14,11 +14,25 @@ const STORAGE_KEYS = {
   CUSTOM_LOGO: 'eldeeb_pharmacy_custom_logo_v1',
 };
 
+export function recalculateProductLoyaltyPoints(price: number): number {
+  if (!price || price <= 0) return 0;
+  const pts = price / 100;
+  return Number(pts.toFixed(1));
+}
+
+export function ensureProductLoyaltySystem(products: Product[]): Product[] {
+  return products.map((p) => ({
+    ...p,
+    points: recalculateProductLoyaltyPoints(p.price),
+  }));
+}
+
 export function getStoredProducts(): Product[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
     if (saved) {
-      return JSON.parse(saved);
+      const parsed: Product[] = JSON.parse(saved);
+      return ensureProductLoyaltySystem(parsed);
     }
   } catch (e) {
     console.error('Failed to load products from storage', e);
@@ -36,16 +50,17 @@ export function clearAllProducts(): void {
 
 export function saveProducts(products: Product[]): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+    const calibrated = ensureProductLoyaltySystem(products);
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(calibrated));
   } catch (e) {
     console.error('Failed to save products', e);
   }
 }
 
 export function calculateTier(points: number): LoyaltyTier {
-  if (points >= 1000) return 'diamond';
-  if (points >= 500) return 'gold';
-  if (points >= 200) return 'silver';
+  if (points >= 300) return 'diamond';
+  if (points >= 150) return 'gold';
+  if (points >= 50) return 'silver';
   return 'bronze';
 }
 

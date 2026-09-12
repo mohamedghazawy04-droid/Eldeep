@@ -64,42 +64,43 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg shadow-2xl border border-sky-100 dark:border-slate-800 overflow-hidden font-cairo my-auto max-h-[90vh] flex flex-col"
       >
-        {/* Header with image */}
-        <div className="relative h-60 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+        {/* Header with image - click anywhere to zoom */}
+        <div
+          className="relative h-64 sm:h-72 w-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-3 cursor-zoom-in group select-none border-b border-slate-200 dark:border-slate-800 overflow-hidden"
+          onClick={() => onZoomImage && onZoomImage(product)}
+          title="انقر لتكبير صورة العلبة للشاشة كاملة"
+        >
           <img
             src={product.image}
             alt={product.nameAr}
-            className="w-full h-full object-cover"
+            className="max-h-full max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
             referrerPolicy="no-referrer"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+
+          {/* Floating Action: Click to Zoom Banner */}
+          <div className="absolute top-3 left-14 bg-slate-900/80 hover:bg-sky-600 text-white px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-md transition-all shadow-lg flex items-center gap-1.5 border border-white/15">
+            <Maximize2 className="w-3.5 h-3.5 text-sky-400" />
+            <span>تكبير الصورة 🔍</span>
+          </div>
 
           {/* Close button */}
           <button
             id="close-product-details-btn"
-            onClick={onClose}
-            className="absolute top-3 left-3 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors backdrop-blur-sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="absolute top-3 left-3 w-9 h-9 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors backdrop-blur-sm shadow z-10 cursor-pointer"
+            title="إغلاق"
           >
             <X className="w-5 h-5" />
           </button>
 
-          {/* Zoom Image Button */}
-          {onZoomImage && (
-            <button
-              type="button"
-              onClick={() => onZoomImage(product)}
-              className="absolute top-3 left-14 px-2.5 py-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center gap-1 text-[11px] font-bold backdrop-blur-sm transition-colors border border-white/20"
-              title="تكبير الصورة للشاشة"
-            >
-              <Maximize2 className="w-3.5 h-3.5 text-sky-400" />
-              <span>تكبير الصورة</span>
-            </button>
-          )}
-
           {/* Points badge */}
-          <div className="absolute top-3 right-3 bg-amber-400 text-slate-950 text-xs font-black px-2.5 py-1 rounded-full shadow-md flex items-center gap-1">
+          <div className="absolute top-3 right-3 bg-amber-400 text-slate-950 text-xs font-black px-2.5 py-1 rounded-full shadow-md flex items-center gap-1 z-10">
             <Sparkles className="w-3.5 h-3.5 fill-amber-700 text-amber-700" />
-            <span>+{product.points} نقطة ولاء</span>
+            <span>+{product.points} نقطة ولاء (100 ج.م = 1 نقطة)</span>
           </div>
 
           {/* Title on Image */}

@@ -40,19 +40,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   // Subtotal
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
-  // Points earned based on price: 10 points per 1 EGP spent
-  const basePointsFromSpend = Math.round(subtotal * 10);
-  const productBonusPoints = items.reduce((sum, item) => sum + item.product.points * item.quantity, 0);
-  
-  // Tier multiplier
+  // 100 EGP spent = 1 point
   const multiplier = activeCustomer?.tier === 'diamond' ? 2 : activeCustomer?.tier === 'gold' ? 1.5 : activeCustomer?.tier === 'silver' ? 1.2 : 1;
-  const totalEarnedPoints = Math.round((basePointsFromSpend + productBonusPoints) * multiplier);
+  const totalEarnedPoints = Math.max(0, Number(((subtotal / 100) * multiplier).toFixed(1)));
 
-  // Points redemption calculation: 1000 points = 10 EGP discount (100 points = 1 EGP)
+  // Points redemption calculation: 1 point = 1 EGP discount
   const availablePoints = activeCustomer?.points || 0;
-  const maxPossibleDiscount = Math.floor((availablePoints / 1000) * 10);
-  const pointsDiscount = usePoints ? Math.min(subtotal, maxPossibleDiscount) : 0;
-  const pointsToDeduct = usePoints ? availablePoints : 0;
+  const maxPossibleDiscount = Math.min(subtotal, Math.floor(availablePoints));
+  const pointsDiscount = usePoints ? maxPossibleDiscount : 0;
+  const pointsToDeduct = usePoints ? pointsDiscount : 0;
   const finalTotal = Math.max(0, subtotal - pointsDiscount);
 
   const handleCheckout = (e: React.FormEvent) => {
@@ -91,15 +87,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     saveOrder(newOrder);
     syncSaveOrderToFirestore(newOrder);
 
-    // Update customer points: if redeemed, points are zeroed out then new order points added
+    // Update customer points: deduct used points and add newly earned points
     if (activeCustomer) {
-      const remainingPoints = usePoints ? 0 : activeCustomer.points;
+      const remainingPoints = Math.max(0, activeCustomer.points - pointsToDeduct);
       const updatedCustomer: Customer = {
         ...activeCustomer,
         name: customerName.trim(),
         phone: customerPhone.trim(),
         address: customerAddress.trim() || activeCustomer.address,
-        points: Math.max(0, remainingPoints + totalEarnedPoints),
+        points: Number((remainingPoints + totalEarnedPoints).toFixed(1)),
         totalOrders: activeCustomer.totalOrders + 1,
       };
       saveCustomer(updatedCustomer);
@@ -281,7 +277,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     </span>
                   </div>
                   <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                    تساوي خصم {maxPossibleDiscount} ج.م (كل 1000 نقطة = 10 ج.م)
+                    تساوي خصم {availablePoints} ج.م (كل نقطة = 1 ج.م)
                   </span>
                 </div>
 
@@ -294,12 +290,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500"
                     />
                     <span>
-                      استبدال وتصفير النقاط للحصول على خصم <strong>{pointsDiscount} جنيه</strong> فورياً
+                      استبدال النقاط والحصول على خصم <strong>{maxPossibleDiscount} جنيه</strong> من الفاتورة
                     </span>
                   </label>
                 ) : (
-                  <p className="text-[11px] text-slate-500">
-                    اطلب هذا الأوردر واكسب <strong>+{totalEarnedPoints} نقطة</strong> (10 نقاط لكل 1 جنيه) لتستخدمها في طلبك القادم!
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    كل 100 جنيه مشتريات تمنحك 1 نقطة ولاء (تخصم 1 جنيه من طلباتك القادمة).
                   </p>
                 )}
               </div>
@@ -307,10 +303,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="p-3 bg-sky-50 dark:bg-sky-950/40 rounded-2xl border border-sky-200/60 dark:border-sky-900/50 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-sky-900 dark:text-sky-200 block">
-                    اكسب +{totalEarnedPoints} نقطة ولاء
+                    اكسب +{totalEarnedPoints} نقطة ولاء (100 ج.م = 1 نقطة)
                   </span>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                    سجل حسابك مجاناً لتجميع النقاط
+                    سجل حسابك مجاناً واستبدل كل نقطة بـ 1 جنيه خصم
                   </span>
                 </div>
                 <button

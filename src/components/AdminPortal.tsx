@@ -493,7 +493,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       image ||
       'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=500&auto=format&fit=crop&q=80';
     const parsedPrice = parseFloat(price) || 0;
-    const calculatedPoints = parseInt(points, 10) || Math.max(10, Math.round(parsedPrice * 10));
+    const calculatedPoints = points ? parseFloat(points) : Math.max(0.1, Number((parsedPrice / 100).toFixed(1)));
     const qtyNumber = parseInt(stockQuantity, 10);
 
     if (editingProductId) {

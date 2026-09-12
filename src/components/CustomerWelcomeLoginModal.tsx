@@ -34,8 +34,8 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
 
     setIsSubmitting(true);
 
-    // Initial 50 welcome points for new customer!
-    const welcomePoints = 50;
+    // Initial 10 welcome points for new customer (= 10 EGP discount!)
+    const welcomePoints = 10;
     const newCustomer: Customer = {
       id: 'cust-' + Date.now(),
       name: name.trim(),
@@ -107,10 +107,10 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
               </div>
               <div className="text-right">
                 <h4 className="text-xs font-black text-amber-900 dark:text-amber-300">
-                  هدية ترحيبية فورية: 50 نقطة ولاء!
+                  هدية ترحيبية فورية: 10 نقاط ولاء (تخصم 10 جنيه من أول طلب)!
                 </h4>
                 <p className="text-[11px] text-amber-800/90 dark:text-amber-400/90 leading-tight">
-                  سجّل رقمك لتفعيل الخصم ومتابعة طلبك خطوة بخطوة مع كابتن التوصيل.
+                  نظام الولاء: كل 100 جنيه = 1 نقطة، والنقطة = 1 جنيه خصم مباشر!
                 </p>
               </div>
             </div>

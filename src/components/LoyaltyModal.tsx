@@ -52,7 +52,7 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
       return;
     }
 
-    const currentPoints = activeCustomer ? activeCustomer.points : 50; // 50 welcome bonus points!
+    const currentPoints = activeCustomer ? activeCustomer.points : 10; // 10 welcome bonus points = 10 EGP!
     const newCustomer: Customer = {
       id: activeCustomer?.id || 'cust-' + Date.now(),
       name: name.trim(),
@@ -100,31 +100,31 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
         return {
           title: 'العميل الذهبي 🥇',
           color: 'from-amber-400 to-yellow-600',
-          nextGoal: 'باقي ' + Math.max(0, 1000 - (activeCustomer?.points || 0)) + ' نقطة للماسي',
-          progress: Math.min(100, (((activeCustomer?.points || 0) - 500) / 500) * 100),
+          nextGoal: 'باقي ' + Math.max(0, 300 - (activeCustomer?.points || 0)) + ' نقطة للماسي',
+          progress: Math.min(100, (((activeCustomer?.points || 0) - 150) / 150) * 100),
           perks: ['مضاعفة نقاط 1.5x على الأدوية والمستلزمات', 'شحن مجاني للطلبات فوق 200 جنيه', 'أولوية تجهيز الروشتات'],
         };
       case 'silver':
         return {
           title: 'العميل الفضي 🥈',
           color: 'from-slate-400 to-slate-600',
-          nextGoal: 'باقي ' + Math.max(0, 500 - (activeCustomer?.points || 0)) + ' نقطة للذهبي',
-          progress: Math.min(100, (((activeCustomer?.points || 0) - 200) / 300) * 100),
+          nextGoal: 'باقي ' + Math.max(0, 150 - (activeCustomer?.points || 0)) + ' نقطة للذهبي',
+          progress: Math.min(100, (((activeCustomer?.points || 0) - 50) / 100) * 100),
           perks: ['مضاعفة نقاط 1.2x', 'عروض حصرية وخصومات على منتجات العناية بالبشرة'],
         };
       default:
         return {
           title: 'العميل البرونزي 🥉',
           color: 'from-amber-600 to-amber-800',
-          nextGoal: 'باقي ' + Math.max(0, 200 - (activeCustomer?.points || 0)) + ' نقطة للفضي',
-          progress: Math.min(100, ((activeCustomer?.points || 0) / 200) * 100),
-          perks: ['احتساب 10 نقاط لكل 1 جنيه مشتريات (1000 نقطة = 10 ج.م خصم)', 'استبدال وتصفير النقاط بخصم مالي فوري في السلة'],
+          nextGoal: 'باقي ' + Math.max(0, 50 - (activeCustomer?.points || 0)) + ' نقطة للفضي',
+          progress: Math.min(100, ((activeCustomer?.points || 0) / 50) * 100),
+          perks: ['احتساب 1 نقطة لكل 100 جنيه مشتريات', 'كل 1 نقطة ولاء = 1 جنيه خصم مالي مباشر بالسلة'],
         };
     }
   };
 
   const tierInfo = getTierDetails(activeCustomer?.tier || 'bronze');
-  const pointsWorthEgp = (((activeCustomer?.points || 0) / 1000) * 10).toFixed(1);
+  const pointsWorthEgp = ((activeCustomer?.points || 0) * 1).toFixed(1);
 
   return (
     <div
@@ -246,7 +246,7 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
               <div className="p-3.5 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900/50 text-xs text-sky-900 dark:text-sky-200 leading-relaxed flex items-start gap-2.5">
                 <Gift className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
                 <span>
-                  <strong>كيف تكسب نقاطاً إضافية؟</strong> لكل 1 جنيه في طلبك تكسب 10 نقاط ولاء (الـ 1000 نقطة تعادل 10 جنيه خصم فوري)، بالإضافة لنقاط البونص على كل منتج، مع تصفير النقاط عند الاستفادة من الخصم!
+                  <strong>نظام الولاء المباشر والواضح:</strong> كل 100 جنيه مشتريات = 1 نقطة ولاء، والنقطة الواحدة تخصم 1 جنيه مصري حقيقي من فاتورتك بالسلة!
                 </span>
               </div>
             </>
@@ -257,7 +257,7 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
               <PharmacyDeliveryAnimation isInteracting={isInputFocused} />
 
               <div className="p-3 bg-sky-50 dark:bg-sky-950/40 rounded-2xl border border-sky-100 dark:border-sky-900/50 text-xs text-sky-800 dark:text-sky-300">
-                🎉 <strong>هدية ترحيبية فورية:</strong> سجّل بياناتك الآن واحصل على <strong>50 نقطة ولاء مجاناً</strong> تضاف لحسابك فوراً وتخصم من أول أوردر!
+                🎉 <strong>هدية ترحيبية فورية:</strong> سجّل بياناتك الآن واحصل على <strong>10 نقاط ولاء مجاناً</strong> (تعادل 10 جنيه خصم فوري) تضاف لحسابك وتخصم من أول أوردر!
               </div>
 
               <div>
