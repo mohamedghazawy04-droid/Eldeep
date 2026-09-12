@@ -13,6 +13,7 @@ import {
   Calculator,
   ChevronDown,
   ChevronUp,
+  Maximize2,
 } from 'lucide-react';
 import { Product } from '../types';
 import { createProductInquiryWhatsAppUrl } from '../services/whatsapp';
@@ -22,12 +23,14 @@ interface ProductDetailsModalProps {
   product: Product | null;
   onClose: () => void;
   onAddToCart: (product: Product) => void;
+  onZoomImage?: (product: Product) => void;
 }
 
 export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   product,
   onClose,
   onAddToCart,
+  onZoomImage,
 }) => {
   const [showCalculator, setShowCalculator] = useState(true);
 
@@ -79,6 +82,19 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+
+          {/* Zoom Image Button */}
+          {onZoomImage && (
+            <button
+              type="button"
+              onClick={() => onZoomImage(product)}
+              className="absolute top-3 left-14 px-2.5 py-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center gap-1 text-[11px] font-bold backdrop-blur-sm transition-colors border border-white/20"
+              title="تكبير الصورة للشاشة"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-sky-400" />
+              <span>تكبير الصورة</span>
+            </button>
+          )}
 
           {/* Points badge */}
           <div className="absolute top-3 right-3 bg-amber-400 text-slate-950 text-xs font-black px-2.5 py-1 rounded-full shadow-md flex items-center gap-1">

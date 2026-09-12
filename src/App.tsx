@@ -50,6 +50,9 @@ import { PrescriptionModal } from './components/PrescriptionModal';
 import { LoyaltyModal } from './components/LoyaltyModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { AdminModal } from './components/AdminModal';
+import { AdminPortal } from './components/AdminPortal';
+import { CustomerWelcomeLoginModal } from './components/CustomerWelcomeLoginModal';
+import { ProductImageZoomModal } from './components/ProductImageZoomModal';
 import { MascotPet } from './components/MascotPet';
 import { Logo } from './components/Logo';
 
@@ -71,6 +74,53 @@ export default function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>(getStoredNotifications);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => getStoredTheme() === 'dark');
 
+  // Multi-view routing: Customer Store vs Standalone Admin Portal & App Hub
+  const [viewMode, setViewMode] = useState<'store' | 'admin'>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const h = window.location.hash.toLowerCase();
+      if (
+        urlParams.get('hub') === 'true' ||
+        urlParams.get('admin') === 'true' ||
+        urlParams.get('manage') === 'true' ||
+        h === '#hub' ||
+        h === '#admin' ||
+        h === '#portal' ||
+        h === '#manage'
+      ) {
+        return 'admin';
+      }
+    }
+    return 'store';
+  });
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const h = window.location.hash.toLowerCase();
+      if (h === '#hub' || h === '#admin' || h === '#portal' || h === '#manage') {
+        setViewMode('admin');
+      } else if (h === '#store' || h === '') {
+        setViewMode('store');
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+
+    // Secret shortcut for owner: Alt + H or Ctrl + Alt + A
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.altKey && e.key.toLowerCase() === 'h') || (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'a')) {
+        e.preventDefault();
+        window.location.hash = 'hub';
+        setViewMode('admin');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   // Modals state
   const [isPrescriptionOpen, setIsPrescriptionOpen] = useState(false);
   const [isLoyaltyOpen, setIsLoyaltyOpen] = useState(false);
@@ -78,6 +128,20 @@ export default function App() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // Customer Welcome Login Modal (opens when link is clicked if not logged in)
+  const [isWelcomeLoginOpen, setIsWelcomeLoginOpen] = useState<boolean>(() => {
+    try {
+      const dismissed = sessionStorage.getItem('eldeeb_guest_dismissed') === 'true';
+      const existingCustomer = getStoredCustomer();
+      return !existingCustomer && !dismissed;
+    } catch {
+      return false;
+    }
+  });
+
+  // Mobile Pinch/Tap Zoom Modal for product images
+  const [zoomedProduct, setZoomedProduct] = useState<Product | null>(null);
 
   // Micro-interaction: Animated Cart Drop payload
   const [cartDropPayload, setCartDropPayload] = useState<CartDropPayload | null>(null);
@@ -259,6 +323,27 @@ export default function App() {
       ? 'جميع الأقسام'
       : CATEGORIES.find((c) => c.id === selectedCategory)?.nameAr;
 
+  // Render Standalone Admin Portal & Connected Multi-App Hub if in admin mode
+  if (viewMode === 'admin') {
+    return (
+      <div className={isDarkMode ? 'dark' : ''}>
+        <AdminPortal
+          products={products}
+          onAddProduct={handleAddProduct}
+          onDeleteProduct={handleDeleteProduct}
+          onUpdateProduct={handleUpdateProduct}
+          onClearAllProducts={handleClearAllProducts}
+          onBatchImportProducts={handleBatchImportProducts}
+          onBroadcastNotification={handleBroadcastNotification}
+          onBackToStore={() => {
+            window.location.hash = '';
+            setViewMode('store');
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-cairo transition-colors duration-200">
       {/* Top Navbar */}
@@ -274,7 +359,10 @@ export default function App() {
         activeCustomer={activeCustomer}
         onOpenLoyalty={() => setIsLoyaltyOpen(true)}
         onOpenPrescription={() => setIsPrescriptionOpen(true)}
-        onOpenAdmin={() => setIsAdminOpen(true)}
+        onOpenAdmin={() => {
+          window.location.hash = 'hub';
+          setViewMode('admin');
+        }}
       />
 
       {/* Main Container */}
@@ -443,6 +531,7 @@ export default function App() {
                   product={product}
                   onAddToCart={handleAddToCart}
                   onViewDetails={setSelectedProduct}
+                  onZoomImage={(p) => setZoomedProduct(p)}
                 />
               ))}
             </div>
@@ -552,19 +641,60 @@ export default function App() {
             <div>
               جميع الحقوق محفوظة © {new Date().getFullYear()} صيدليات الديب - El Deeb Pharmacy
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsAdminOpen(true)}
-                className="hover:text-sky-600 flex items-center gap-1 font-bold"
+            <div className="flex items-center gap-2.5">
+              <span className="text-slate-400 font-mono font-medium">WhatsApp: 01009097378</span>
+              <span
+                onClick={() => {
+                  const now = Date.now();
+                  const lastTap = Number(sessionStorage.getItem('eldeeb_footer_dot_tap') || '0');
+                  const count = Number(sessionStorage.getItem('eldeeb_footer_dot_taps') || '0');
+                  if (now - lastTap < 600) {
+                    const next = count + 1;
+                    sessionStorage.setItem('eldeeb_footer_dot_taps', String(next));
+                    sessionStorage.setItem('eldeeb_footer_dot_tap', String(now));
+                    if (next >= 3) {
+                      sessionStorage.removeItem('eldeeb_footer_dot_taps');
+                      window.location.hash = 'hub';
+                      setViewMode('admin');
+                    }
+                  } else {
+                    sessionStorage.setItem('eldeeb_footer_dot_taps', '1');
+                    sessionStorage.setItem('eldeeb_footer_dot_tap', String(now));
+                  }
+                }}
+                className="cursor-default select-none text-slate-400 hover:text-slate-200 transition-colors"
               >
-                <span>لوحة تحكم الصيدلية (المالك)</span>
-              </button>
-              <span>•</span>
-              <span className="text-slate-400 font-mono">WhatsApp: 01009097378</span>
+                •
+              </span>
+              <span className="text-slate-400 font-medium">خدمة التوصيل السريع 24/7</span>
             </div>
           </div>
         </div>
       </footer>
+
+      {/* Customer Welcome Login Screen with Calm Motorcycle Delivery Animation */}
+      <AnimatePresence>
+        {isWelcomeLoginOpen && (
+          <CustomerWelcomeLoginModal
+            isOpen={isWelcomeLoginOpen}
+            onClose={() => setIsWelcomeLoginOpen(false)}
+            onLoginSuccess={(customer) => {
+              setActiveCustomer(customer);
+              setIsWelcomeLoginOpen(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Mobile-Friendly Fullscreen Image Zoom (Tap / Pinch / Pan) */}
+      <AnimatePresence>
+        {zoomedProduct && (
+          <ProductImageZoomModal
+            product={zoomedProduct}
+            onClose={() => setZoomedProduct(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Modals & Drawers */}
       <AnimatePresence>
@@ -643,6 +773,7 @@ export default function App() {
             product={selectedProduct}
             onClose={() => setSelectedProduct(null)}
             onAddToCart={handleAddToCart}
+            onZoomImage={(p) => setZoomedProduct(p)}
           />
         )}
       </AnimatePresence>

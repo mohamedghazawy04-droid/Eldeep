@@ -1,18 +1,20 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ShoppingCart, Sparkles, Info, Pill, Plus } from 'lucide-react';
+import { ShoppingCart, Sparkles, Info, Pill, Plus, Maximize2 } from 'lucide-react';
 import { Product } from '../types';
 
 interface ProductCardProps {
   product: Product;
   onAddToCart: (product: Product, event: React.MouseEvent) => void;
   onViewDetails: (product: Product) => void;
+  onZoomImage?: (product: Product) => void;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   onAddToCart,
   onViewDetails,
+  onZoomImage,
 }) => {
   return (
     <motion.div
@@ -72,6 +74,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <Sparkles className="w-3 h-3 fill-amber-700 text-amber-700" />
           <span>+{product.points} نقطة</span>
         </div>
+
+        {/* Zoom image icon button for customer mobile */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onZoomImage) {
+              onZoomImage(product);
+            } else {
+              onViewDetails(product);
+            }
+          }}
+          className="absolute bottom-2.5 left-2.5 w-7 h-7 rounded-full bg-slate-900/75 hover:bg-slate-900 text-white flex items-center justify-center backdrop-blur-xs transition-all shadow-md z-10 active:scale-90"
+          title="تكبير صورة الدواء للشاشة"
+        >
+          <Maximize2 className="w-3.5 h-3.5" />
+        </button>
 
         {/* Requires Prescription Pill */}
         {product.requiresPrescription && (

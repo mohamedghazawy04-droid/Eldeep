@@ -35,7 +35,7 @@ function createFirestoreInstance(): Firestore {
     return initializeFirestore(
       app,
       {
-        experimentalForceLongPolling: true,
+        experimentalAutoDetectLongPolling: true,
       },
       databaseId
     );
@@ -47,19 +47,25 @@ function createFirestoreInstance(): Firestore {
 export const db: Firestore = createFirestoreInstance();
 export const isFirebaseReady = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
 
-// Test Firestore connection on boot
+// Test Firestore connection on boot with graceful offline resilience
 async function testConnection() {
   if (!isFirebaseReady) return;
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn("Please check your Firebase configuration or network connectivity.");
     }
   }
 }
 
-testConnection();
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    testConnection().catch(() => {});
+  }, 1500);
+} else {
+  testConnection().catch(() => {});
+}
 
 export interface FirebaseConfigStatus {
   isConfigured: boolean;

@@ -191,11 +191,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const correctPin = getAdminPin();
-    // Default PIN is MOhager191995 or user stored PIN
-    if (pin === correctPin || pin === 'MOhager191995' || pin === '1234') {
+    if (pin.trim() === 'MOhager191995' || pin.trim() === correctPin) {
       setIsAuthenticated(true);
     } else {
-      alert('كلمة المرور غير صحيحة! كلمة المرور المعتمدة: MOhager191995');
+      alert('كلمة المرور غير صحيحة');
     }
   };
 
@@ -637,11 +636,23 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               يرجى إدخال كلمة المرور للوصول الآمن لإدارة المحتوى والمخزون
             </p>
 
-            <form onSubmit={handleLogin} className="w-full max-w-xs space-y-3">
+            <form
+              onSubmit={handleLogin}
+              autoComplete="off"
+              data-form-type="other"
+              className="w-full max-w-xs space-y-3"
+            >
               <div className="relative">
                 <input
                   id="admin-pin-input"
                   type={showPassword ? 'text' : 'password'}
+                  name="admin_secret_key_field"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  spellCheck={false}
+                  autoCorrect="off"
+                  autoCapitalize="none"
                   value={pin}
                   onChange={(e) => setPin(e.target.value)}
                   placeholder="كلمة المرور السرية"
@@ -665,6 +676,19 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               >
                 دخول للوحة التحكم
               </button>
+
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    window.location.hash = 'admin';
+                  }}
+                  className="text-xs text-sky-600 dark:text-sky-400 hover:underline font-bold"
+                >
+                  الذهاب للبوابة الإدارية المستقلة ومركز التطبيقات ↗
+                </button>
+              </div>
             </form>
           </div>
         ) : (

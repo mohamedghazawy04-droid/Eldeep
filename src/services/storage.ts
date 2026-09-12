@@ -216,7 +216,7 @@ export function saveTheme(theme: 'light' | 'dark'): void {
 export function getAdminPin(): string {
   try {
     const pin = localStorage.getItem(STORAGE_KEYS.ADMIN_PIN);
-    if (pin) return pin;
+    if (pin && pin !== '1234' && pin !== '1995') return pin;
   } catch {
     // ignore
   }

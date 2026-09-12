@@ -1,0 +1,8 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-eldeebpharmacy-29b355c2-9f89-44a0-b582-23e3c414ebd1",
+      "rules": "firestore.rules"
+    }
+  ]
+}

@@ -13,7 +13,14 @@ import {
 import { db, isFirebaseReady } from '../firebase';
 import { AppNotification, Customer, OrderRecord, PrescriptionOrder, Product } from '../types';
 import { INITIAL_NOTIFICATIONS, INITIAL_PRODUCTS } from '../data/initialData';
-import { saveProducts, saveNotifications, saveOrder, savePrescription, saveCustomer } from './storage';
+import {
+  saveProducts,
+  getStoredProducts,
+  saveNotifications,
+  saveOrder,
+  savePrescription,
+  saveCustomer,
+} from './storage';
 
 const PRODUCTS_COL = 'products';
 const ORDERS_COL = 'orders';
@@ -36,8 +43,10 @@ export function subscribeToFirestoreProducts(
       productsRef,
       async (snapshot) => {
         if (snapshot.empty) {
-          saveProducts([]);
-          onUpdate([]);
+          const stored = getStoredProducts();
+          const itemsToKeep = stored.length > 0 ? stored : INITIAL_PRODUCTS;
+          onUpdate(itemsToKeep);
+          saveProducts(itemsToKeep);
           return;
         }
 
@@ -51,7 +60,11 @@ export function subscribeToFirestoreProducts(
         onUpdate(items);
       },
       (error) => {
-        console.warn('Firestore products listener error:', error);
+        // When backend is temporarily unreachable or offline, keep cached/local products intact
+        const stored = getStoredProducts();
+        if (stored.length > 0) {
+          onUpdate(stored);
+        }
       }
     );
 

@@ -57,16 +57,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <PhoneCall className="w-3 h-3" />
               <span>+201009097378</span>
             </a>
-
-            <button
-              id="admin-login-top-btn"
-              onClick={onOpenAdmin}
-              className="flex items-center gap-1 text-[10px] bg-white/15 hover:bg-white/25 px-2 py-0.5 rounded-md transition-colors"
-              title="دخول مالك الصيدلية"
-            >
-              <Lock className="w-2.5 h-2.5" />
-              <span>لوحة الإدارة</span>
-            </button>
           </div>
         </div>
       </div>
@@ -74,8 +64,33 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Main Header */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3">
         <div className="flex items-center justify-between gap-3">
-          {/* Logo */}
-          <div className="cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+          {/* Logo with secret 5-tap owner shortcut (zero hint to public) */}
+          <div
+            className="cursor-pointer select-none"
+            onClick={(e) => {
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              // Secret owner gesture: Alt+click or 5 fast taps
+              if (e.altKey && onOpenAdmin) {
+                onOpenAdmin();
+                return;
+              }
+              const now = Date.now();
+              const lastTap = Number(sessionStorage.getItem('eldeeb_logo_tap') || '0');
+              const tapCount = Number(sessionStorage.getItem('eldeeb_logo_taps') || '0');
+              if (now - lastTap < 600) {
+                const newCount = tapCount + 1;
+                sessionStorage.setItem('eldeeb_logo_taps', String(newCount));
+                sessionStorage.setItem('eldeeb_logo_tap', String(now));
+                if (newCount >= 5 && onOpenAdmin) {
+                  sessionStorage.removeItem('eldeeb_logo_taps');
+                  onOpenAdmin();
+                }
+              } else {
+                sessionStorage.setItem('eldeeb_logo_taps', '1');
+                sessionStorage.setItem('eldeeb_logo_tap', String(now));
+              }
+            }}
+          >
             <Logo size="md" />
           </div>
 
