@@ -39,7 +39,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
         {/* Badges */}
-        <div className="absolute top-2.5 right-2.5 flex flex-col gap-1 items-end">
+        <div className="absolute top-2.5 right-2.5 flex flex-col gap-1 items-end z-10">
+          {product.isComingSoon && (
+            <span className="bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+              ⏳ قريباً
+            </span>
+          )}
+          {product.isLowStock && !product.isComingSoon && (
+            <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1">
+              <span>⚠️ أوشك على النفاذ</span>
+            </span>
+          )}
+          {!product.inStock && !product.isComingSoon && (
+            <span className="bg-slate-800/90 text-slate-200 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+              غير متوفر
+            </span>
+          )}
           {product.isNew && (
             <span className="bg-sky-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
               جديد
@@ -120,13 +135,25 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             id={`add-to-cart-${product.id}`}
             type="button"
             onClick={(e) => onAddToCart(product, e)}
-            disabled={!product.inStock}
-            className="p-2 sm:px-3 sm:py-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 disabled:opacity-50 text-white rounded-xl sm:rounded-2xl font-bold text-xs shadow-sm hover:shadow transition-all active:scale-90 flex items-center gap-1.5"
-            title="إضافة إلى السلة"
+            disabled={!product.inStock || product.isComingSoon}
+            className={`p-2 sm:px-3 sm:py-2 rounded-xl sm:rounded-2xl font-bold text-xs shadow-sm transition-all active:scale-90 flex items-center gap-1.5 ${
+              product.isComingSoon
+                ? 'bg-purple-600/80 text-white cursor-not-allowed'
+                : !product.inStock
+                ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white hover:shadow'
+            }`}
+            title={product.isComingSoon ? 'سيتوفر قريباً' : 'إضافة إلى السلة'}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <ShoppingCart className="w-3.5 h-3.5 hidden sm:inline" />
-            <span className="hidden sm:inline">أضف</span>
+            {product.isComingSoon ? (
+              <span>قريباً</span>
+            ) : (
+              <>
+                <Plus className="w-3.5 h-3.5" />
+                <ShoppingCart className="w-3.5 h-3.5 hidden sm:inline" />
+                <span className="hidden sm:inline">أضف</span>
+              </>
+            )}
           </button>
         </div>
       </div>

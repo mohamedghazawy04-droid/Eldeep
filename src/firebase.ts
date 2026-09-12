@@ -1,5 +1,11 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  Firestore,
+  doc,
+  getDocFromServer,
+} from 'firebase/firestore';
 import firebaseAppletConfig from '../firebase-applet-config.json';
 
 const metaEnv = ((import.meta as unknown) as { env?: Record<string, string | undefined> })?.env || {};
@@ -23,8 +29,37 @@ if (!getApps().length) {
 }
 
 export const app = appInstance;
-export const db: Firestore = getFirestore(app, databaseId);
+
+function createFirestoreInstance(): Firestore {
+  try {
+    return initializeFirestore(
+      app,
+      {
+        experimentalForceLongPolling: true,
+      },
+      databaseId
+    );
+  } catch {
+    return getFirestore(app, databaseId);
+  }
+}
+
+export const db: Firestore = createFirestoreInstance();
 export const isFirebaseReady = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
+
+// Test Firestore connection on boot
+async function testConnection() {
+  if (!isFirebaseReady) return;
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn("Please check your Firebase configuration or network connectivity.");
+    }
+  }
+}
+
+testConnection();
 
 export interface FirebaseConfigStatus {
   isConfigured: boolean;

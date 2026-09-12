@@ -1,8 +1,25 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode in Tailwind CSS v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
-  body {
+  html, body {
     font-family: 'Cairo', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    overflow-x: hidden;
+    max-width: 100vw;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    touch-action: pan-y pinch-zoom;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #root {
+    overflow-x: hidden;
+    max-width: 100%;
+    width: 100%;
+    min-height: 100vh;
   }
 }
 
@@ -42,4 +59,23 @@
 
 .animate-drop-into-cart {
   animation: dropItem 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Scooter engine vibration and exhaust smoke animation */
+@keyframes scooterVibrate {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+
+.animate-scooter-vibrate {
+  animation: scooterVibrate 0.18s infinite ease-in-out;
+}
+
+@keyframes smokePuff {
+  0% { transform: scale(0.4) translateX(0); opacity: 0.8; }
+  100% { transform: scale(1.6) translateX(-18px); opacity: 0; }
+}
+
+.animate-smoke-puff {
+  animation: smokePuff 0.6s infinite ease-out;
 }

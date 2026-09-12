@@ -1,8 +1,22 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, ShoppingCart, MessageCircle, AlertTriangle, Check, Sparkles, Pill, ShieldCheck, Tag } from 'lucide-react';
+import {
+  X,
+  ShoppingCart,
+  MessageCircle,
+  AlertTriangle,
+  Check,
+  Sparkles,
+  Pill,
+  ShieldCheck,
+  Tag,
+  Calculator,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { Product } from '../types';
 import { createProductInquiryWhatsAppUrl } from '../services/whatsapp';
+import { DosageCalculator } from './DosageCalculator';
 
 interface ProductDetailsModalProps {
   product: Product | null;
@@ -15,6 +29,18 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
   onClose,
   onAddToCart,
 }) => {
+  const [showCalculator, setShowCalculator] = useState(true);
+
+  useEffect(() => {
+    if (product) {
+      const isMedicine =
+        product.category === 'medicines' ||
+        product.category === 'baby' ||
+        Boolean(product.dosageForm && (product.dosageForm.includes('شراب') || product.dosageForm.includes('نقط') || product.dosageForm.includes('أقراص')));
+      setShowCalculator(isMedicine);
+    }
+  }, [product]);
+
   if (!product) return null;
 
   const handleInquiry = () => {
@@ -93,13 +119,25 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
 
             <span
               className={`text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 ${
-                product.inStock
+                product.isComingSoon
+                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300'
+                  : product.isLowStock
+                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300'
+                  : product.inStock
                   ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300'
                   : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300'
               }`}
             >
               <Check className="w-3 h-3" />
-              <span>{product.inStock ? 'متوفر بالصيدلية' : 'غير متوفر حالياً'}</span>
+              <span>
+                {product.isComingSoon
+                  ? '⏳ قريباً بالصيدلية'
+                  : product.isLowStock
+                  ? '⚠️ أوشك على النفاذ (كمية محدودة)'
+                  : product.inStock
+                  ? 'متوفر بالصيدلية'
+                  : 'غير متوفر حالياً'}
+              </span>
             </span>
           </div>
 
@@ -133,6 +171,29 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
             </div>
           </div>
 
+          {/* Dosage Calculator Tool */}
+          <div className="space-y-2 pt-1">
+            <button
+              type="button"
+              id="toggle-dosage-calc-btn"
+              onClick={() => setShowCalculator((prev) => !prev)}
+              className="w-full py-2.5 px-3.5 rounded-2xl bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/50 border border-sky-200 dark:border-sky-800/60 flex items-center justify-between text-xs font-bold text-sky-900 dark:text-sky-200 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Calculator className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                <span>حاسبة الجرعات الدوائية حسب الوزن</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] bg-sky-200/90 dark:bg-sky-900 text-sky-900 dark:text-sky-100 px-2.5 py-0.5 rounded-full font-bold">
+                  {showCalculator ? 'إخفاء الحاسبة' : 'احسب الجرعة الآن'}
+                </span>
+                {showCalculator ? <ChevronUp className="w-4 h-4 text-sky-600" /> : <ChevronDown className="w-4 h-4 text-sky-600" />}
+              </div>
+            </button>
+
+            {showCalculator && <DosageCalculator product={product} />}
+          </div>
+
           {/* Tags */}
           {product.tags && product.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1">
@@ -156,11 +217,17 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
                 onAddToCart(product);
                 onClose();
               }}
-              disabled={!product.inStock}
-              className="py-3.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 disabled:opacity-50 text-white rounded-2xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+              disabled={!product.inStock || product.isComingSoon}
+              className={`py-3.5 rounded-2xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+                product.isComingSoon
+                  ? 'bg-purple-600/80 text-white cursor-not-allowed'
+                  : !product.inStock
+                  ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white'
+              }`}
             >
               <ShoppingCart className="w-4 h-4" />
-              <span>إضافة إلى السلة</span>
+              <span>{product.isComingSoon ? 'سيتوفر قريباً بالصيدلية' : 'إضافة إلى السلة'}</span>
             </button>
 
             <button

@@ -92,6 +92,27 @@ export function createProductInquiryWhatsAppUrl(product: Product): string {
 }
 
 /**
+ * Dosage inquiry via WhatsApp
+ */
+export function createDosageInquiryWhatsAppUrl(
+  product: Product,
+  weightKg: number,
+  calculatedDose: string,
+  ageStage: string
+): string {
+  let message = `🏥 *استفسار عن جرعة دواء - صيدلية الديب*\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `💊 *الدواء:* ${product.nameAr} (${product.nameEn})\n`;
+  message += `🧪 *الشكل الصيدلي:* ${product.dosageForm}\n`;
+  message += `⚖️ *وزن المريض:* ${weightKg} كجم (${ageStage})\n`;
+  message += `📊 *الجرعة التقديرية بالحاسبة:* ${calculatedDose}\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `دكتور صيدلي الديب، أرجو تأكيد صحة هذه الجرعة وتكرارها اليومي وطريقة تناولها المثلى. شكراً جزيلاً!`;
+
+  return `https://wa.me/${PHARMACY_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+}
+
+/**
  * General contact / Pharmacist consultation
  */
 export function createConsultationWhatsAppUrl(): string {

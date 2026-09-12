@@ -24,6 +24,9 @@ export interface Product {
   image: string;
   tags?: string[];
   isNew?: boolean;
+  stockQuantity?: number; // كمية المخزون المتبقية
+  isLowStock?: boolean; // أوشك على النفاذ
+  isComingSoon?: boolean; // قريباً في الصيدلية
 }
 
 export interface CartItem {

@@ -4,6 +4,7 @@ import {
   setDoc,
   deleteDoc,
   getDocs,
+  getDoc,
   onSnapshot,
   query,
   orderBy,
@@ -35,17 +36,8 @@ export function subscribeToFirestoreProducts(
       productsRef,
       async (snapshot) => {
         if (snapshot.empty) {
-          // Seed initial products to Firestore
-          try {
-            for (const prod of INITIAL_PRODUCTS) {
-              await setDoc(doc(db, PRODUCTS_COL, prod.id), prod);
-            }
-            onUpdate(INITIAL_PRODUCTS);
-            saveProducts(INITIAL_PRODUCTS);
-          } catch (seedErr) {
-            console.error('Error seeding initial products to Firestore:', seedErr);
-            onUpdate(INITIAL_PRODUCTS);
-          }
+          saveProducts([]);
+          onUpdate([]);
           return;
         }
 
@@ -71,14 +63,124 @@ export function subscribeToFirestoreProducts(
 }
 
 /**
- * Add or update a Product in Firestore
+ * Add or update a Product in Firestore (with merge guarantee and status return)
  */
-export async function syncAddProductToFirestore(product: Product): Promise<void> {
-  if (!isFirebaseReady) return;
+export async function syncAddProductToFirestore(
+  product: Product
+): Promise<{ success: boolean; isOnline: boolean; error?: string }> {
+  if (!isFirebaseReady) {
+    return { success: true, isOnline: false };
+  }
   try {
-    await setDoc(doc(db, PRODUCTS_COL, product.id), product);
-  } catch (err) {
+    await setDoc(doc(db, PRODUCTS_COL, product.id), product, { merge: true });
+    return { success: true, isOnline: true };
+  } catch (err: any) {
     console.error('Failed to save product to Firestore:', err);
+    return {
+      success: false,
+      isOnline: false,
+      error: err?.message || 'تعذر الاتصال بالسيرفر السحابي حالياً',
+    };
+  }
+}
+
+/**
+ * Batch upload multiple Products to Firestore Cloud Database
+ */
+export async function syncBatchUploadProductsToFirestore(
+  products: Product[]
+): Promise<{ successCount: number; error?: string }> {
+  if (!isFirebaseReady) {
+    saveProducts(products);
+    return { successCount: products.length };
+  }
+
+  let count = 0;
+  try {
+    for (const product of products) {
+      await setDoc(doc(db, PRODUCTS_COL, product.id), product, { merge: true });
+      count++;
+    }
+    return { successCount: count };
+  } catch (err: any) {
+    console.error('Batch upload partial error:', err);
+    return { successCount: count, error: err?.message || 'خطأ أثناء رفع بعض المنتجات' };
+  }
+}
+
+/**
+ * Test round-trip latency and connection health to Cloud Firestore
+ */
+export async function checkFirestoreHealth(): Promise<{
+  isHealthy: boolean;
+  latencyMs: number;
+  message: string;
+}> {
+  if (!isFirebaseReady) {
+    return {
+      isHealthy: false,
+      latencyMs: 0,
+      message: 'إعدادات الاتصال السحابي غير مكتملة',
+    };
+  }
+
+  const start = performance.now();
+  try {
+    const healthDoc = doc(db, '_health', 'status');
+    await setDoc(healthDoc, { lastPing: Date.now() }, { merge: true });
+    const latencyMs = Math.round(performance.now() - start);
+    return {
+      isHealthy: true,
+      latencyMs,
+      message: `متصل بنجاح بالسحابة (زمن الاستجابة: ${latencyMs}ms)`,
+    };
+  } catch (err: any) {
+    return {
+      isHealthy: false,
+      latencyMs: 0,
+      message: err?.message || 'تعذر الوصول لقاعدة البيانات السحابية',
+    };
+  }
+}
+
+/**
+ * Download a full JSON backup of the products catalog
+ */
+export function downloadProductsBackupFile(products: Product[]): void {
+  const exportPayload = {
+    pharmacyName: 'صيدلية الديب - El Deeb Pharmacy',
+    exportedAt: new Date().toISOString(),
+    totalProducts: products.length,
+    products,
+  };
+
+  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportPayload, null, 2));
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute('href', dataStr);
+  downloadAnchor.setAttribute(
+    'download',
+    `eldeeb_pharmacy_backup_${new Date().toISOString().slice(0, 10)}.json`
+  );
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+}
+
+/**
+ * Parse products from a JSON backup file
+ */
+export function parseProductsBackupJson(jsonString: string): Product[] {
+  try {
+    const parsed = JSON.parse(jsonString);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((p) => p && p.id && p.nameAr);
+    }
+    if (parsed && Array.isArray(parsed.products)) {
+      return parsed.products.filter((p: any) => p && p.id && p.nameAr);
+    }
+    return [];
+  } catch {
+    return [];
   }
 }
 
@@ -91,6 +193,21 @@ export async function syncDeleteProductFromFirestore(productId: string): Promise
     await deleteDoc(doc(db, PRODUCTS_COL, productId));
   } catch (err) {
     console.error('Failed to delete product from Firestore:', err);
+  }
+}
+
+/**
+ * Clear all Products in Firestore (Start Fresh / Clean Slate)
+ */
+export async function syncClearAllFirestoreProducts(): Promise<void> {
+  if (!isFirebaseReady) return;
+  try {
+    const snap = await getDocs(collection(db, PRODUCTS_COL));
+    const batchPromises = snap.docs.map((d) => deleteDoc(d.ref));
+    await Promise.all(batchPromises);
+    saveProducts([]);
+  } catch (err) {
+    console.error('Failed to clear all products in Firestore:', err);
   }
 }
 
@@ -185,17 +302,48 @@ export function subscribeToFirestorePrescriptions(
 /**
  * Save or Update Customer in Firestore
  */
-export async function syncSaveCustomerToFirestore(customer: Customer): Promise<void> {
+export async function syncSaveCustomerToFirestore(
+  customer: Customer
+): Promise<{ success: boolean; isOnline: boolean; error?: string }> {
   saveCustomer(customer);
-  if (!isFirebaseReady) return;
-  try {
-    await setDoc(doc(db, CUSTOMERS_COL, customer.phone), {
-      ...customer,
-      updatedAt: Date.now(),
-    });
-  } catch (err) {
-    console.error('Failed to save customer to Firestore:', err);
+  if (!isFirebaseReady) {
+    return { success: true, isOnline: false, error: 'وضع أوفلاين مؤقت' };
   }
+  try {
+    const docId = customer.phone.replace(/[^\d+]/g, '') || customer.id;
+    await setDoc(
+      doc(db, CUSTOMERS_COL, docId),
+      {
+        ...customer,
+        docId,
+        updatedAt: Date.now(),
+        registeredOnline: true,
+      },
+      { merge: true }
+    );
+    return { success: true, isOnline: true };
+  } catch (err: any) {
+    console.error('Failed to save customer to Firestore:', err);
+    return { success: false, isOnline: false, error: err?.message || 'خطأ في الحفظ السحابي' };
+  }
+}
+
+/**
+ * Fetch Customer Profile from Firestore by phone
+ */
+export async function fetchCustomerFromFirestore(phone: string): Promise<Customer | null> {
+  if (!isFirebaseReady) return null;
+  try {
+    const docId = phone.replace(/[^\d+]/g, '');
+    if (!docId) return null;
+    const snap = await getDoc(doc(db, CUSTOMERS_COL, docId));
+    if (snap.exists()) {
+      return snap.data() as Customer;
+    }
+  } catch (err) {
+    console.warn('Could not fetch customer by phone:', err);
+  }
+  return null;
 }
 
 /**
@@ -240,11 +388,15 @@ export function subscribeToFirestoreNotifications(
       async (snapshot) => {
         if (snapshot.empty) {
           // Seed initial notifications
-          for (const notif of INITIAL_NOTIFICATIONS) {
-            await setDoc(doc(db, NOTIFICATIONS_COL, notif.id), {
-              ...notif,
-              timestamp: Date.now(),
-            });
+          try {
+            for (const notif of INITIAL_NOTIFICATIONS) {
+              await setDoc(doc(db, NOTIFICATIONS_COL, notif.id), {
+                ...notif,
+                timestamp: Date.now(),
+              });
+            }
+          } catch (seedErr) {
+            console.warn('Initial notifications seed deferred or offline:', seedErr);
           }
           onUpdate(INITIAL_NOTIFICATIONS);
           saveNotifications(INITIAL_NOTIFICATIONS);

@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import { X, Award, Sparkles, User, Phone, MapPin, Check, Gift, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Customer, LoyaltyTier } from '../types';
 import { calculateTier, saveCustomer } from '../services/storage';
-import { syncSaveCustomerToFirestore } from '../services/firestoreSync';
+import { syncSaveCustomerToFirestore, fetchCustomerFromFirestore } from '../services/firestoreSync';
+import { PharmacyDeliveryAnimation } from './PharmacyDeliveryAnimation';
 import confetti from 'canvas-confetti';
 
 interface LoyaltyModalProps {
@@ -23,10 +24,28 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
   const [phone, setPhone] = useState(activeCustomer?.phone || '');
   const [address, setAddress] = useState(activeCustomer?.address || '');
   const [isEditing, setIsEditing] = useState(!activeCustomer);
+  const [onlineStatus, setOnlineStatus] = useState<string | null>(null);
+  const [isCheckingPhone, setIsCheckingPhone] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSave = (e: React.FormEvent) => {
+  const handlePhoneBlur = async () => {
+    if (!phone || activeCustomer || phone.length < 10) return;
+    setIsCheckingPhone(true);
+    const existing = await fetchCustomerFromFirestore(phone);
+    setIsCheckingPhone(false);
+    if (existing) {
+      setName(existing.name);
+      setAddress(existing.address);
+      onCustomerUpdated(existing);
+      saveCustomer(existing);
+      setIsEditing(false);
+      setOnlineStatus('مرحباً بعودتك! تم العثور على حسابك المسجل أونلاين بنقاطك السابقة.');
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim()) {
       alert('يرجى كتابة الاسم ورقم الهاتف للتسجيل');
@@ -46,7 +65,13 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
     };
 
     saveCustomer(newCustomer);
-    syncSaveCustomerToFirestore(newCustomer);
+    const cloudRes = await syncSaveCustomerToFirestore(newCustomer);
+    if (cloudRes.isOnline) {
+      setOnlineStatus('تم تأكيد الحفظ أونلاين في سيرفر صيدلية الديب السحابي بنجاح ☁️✅');
+    } else {
+      setOnlineStatus('تم حفظ الحساب محلياً وجاهز للمزامنة الأوتوماتيكية فور توفر الاتصال');
+    }
+
     onCustomerUpdated(newCustomer);
     setIsEditing(false);
 
@@ -93,19 +118,21 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
           color: 'from-amber-600 to-amber-800',
           nextGoal: 'باقي ' + Math.max(0, 200 - (activeCustomer?.points || 0)) + ' نقطة للفضي',
           progress: Math.min(100, ((activeCustomer?.points || 0) / 200) * 100),
-          perks: ['احتساب 1 نقطة لكل 10 جنيه مشتريات + نقاط إضافية على كل صنف', 'استبدال النقاط بخصم مالي فوري في السلة'],
+          perks: ['احتساب 10 نقاط لكل 1 جنيه مشتريات (1000 نقطة = 10 ج.م خصم)', 'استبدال وتصفير النقاط بخصم مالي فوري في السلة'],
         };
     }
   };
 
   const tierInfo = getTierDetails(activeCustomer?.tier || 'bronze');
-  const pointsWorthEgp = ((activeCustomer?.points || 0) / 10).toFixed(1);
+  const pointsWorthEgp = (((activeCustomer?.points || 0) / 1000) * 10).toFixed(1);
 
   return (
     <div
       id="loyalty-modal-backdrop"
-      className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
-      onClick={onClose}
+      className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-cairo text-right"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -219,13 +246,16 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
               <div className="p-3.5 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900/50 text-xs text-sky-900 dark:text-sky-200 leading-relaxed flex items-start gap-2.5">
                 <Gift className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
                 <span>
-                  <strong>كيف تكسب نقاطاً إضافية؟</strong> لكل 10 جنيه في طلبك تكسب نقطة ولاء، بالإضافة لنقاط البونص الموضحة على بطاقات الأدوية والمكملات، ويمكنك خصم قيمتها فورياً عند إتمام الطلب على الواتساب!
+                  <strong>كيف تكسب نقاطاً إضافية؟</strong> لكل 1 جنيه في طلبك تكسب 10 نقاط ولاء (الـ 1000 نقطة تعادل 10 جنيه خصم فوري)، بالإضافة لنقاط البونص على كل منتج، مع تصفير النقاط عند الاستفادة من الخصم!
                 </span>
               </div>
             </>
           ) : (
             /* Registration Form */
             <form onSubmit={handleSave} className="space-y-4">
+              {/* Pharmacy with animated delivery motorcycle */}
+              <PharmacyDeliveryAnimation isInteracting={isInputFocused} />
+
               <div className="p-3 bg-sky-50 dark:bg-sky-950/40 rounded-2xl border border-sky-100 dark:border-sky-900/50 text-xs text-sky-800 dark:text-sky-300">
                 🎉 <strong>هدية ترحيبية فورية:</strong> سجّل بياناتك الآن واحصل على <strong>50 نقطة ولاء مجاناً</strong> تضاف لحسابك فوراً وتخصم من أول أوردر!
               </div>
@@ -241,6 +271,8 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
                     type="text"
                     required
                     value={name}
+                    onFocus={() => setIsInputFocused(true)}
+                    onBlur={() => setIsInputFocused(false)}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="مثال: د. محمد الديب"
                     className="w-full pr-9 pl-3 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs sm:text-sm font-medium border border-transparent focus:border-sky-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition-colors"
@@ -259,12 +291,27 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
                     type="tel"
                     required
                     value={phone}
+                    onFocus={() => setIsInputFocused(true)}
                     onChange={(e) => setPhone(e.target.value)}
+                    onBlur={(e) => {
+                      setIsInputFocused(false);
+                      handlePhoneBlur();
+                    }}
                     placeholder="010XXXXXXXX"
                     className="w-full pr-9 pl-3 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs sm:text-sm font-medium border border-transparent focus:border-sky-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition-colors"
                   />
                 </div>
+                {isCheckingPhone && (
+                  <p className="text-[10px] text-sky-600 mt-1">جاري التحقق من الحساب أونلاين في قاعدة البيانات...</p>
+                )}
               </div>
+
+              {onlineStatus && (
+                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{onlineStatus}</span>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -276,6 +323,8 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
                     id="reg-cust-address"
                     type="text"
                     value={address}
+                    onFocus={() => setIsInputFocused(true)}
+                    onBlur={() => setIsInputFocused(false)}
                     onChange={(e) => setAddress(e.target.value)}
                     placeholder="الشارع، العمارة، الشقة"
                     className="w-full pr-9 pl-3 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs sm:text-sm font-medium border border-transparent focus:border-sky-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition-colors"

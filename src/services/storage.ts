@@ -23,7 +23,15 @@ export function getStoredProducts(): Product[] {
   } catch (e) {
     console.error('Failed to load products from storage', e);
   }
-  return INITIAL_PRODUCTS;
+  return [];
+}
+
+export function clearAllProducts(): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify([]));
+  } catch (e) {
+    console.error('Failed to clear products', e);
+  }
 }
 
 export function saveProducts(products: Product[]): void {
@@ -212,7 +220,7 @@ export function getAdminPin(): string {
   } catch {
     // ignore
   }
-  return '1234';
+  return 'MOhager191995';
 }
 
 export function setAdminPin(newPin: string): void {

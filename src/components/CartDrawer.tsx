@@ -40,19 +40,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   // Subtotal
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
-  // Bonus points earned
-  const basePointsFromSpend = Math.floor(subtotal / 10);
+  // Points earned based on price: 10 points per 1 EGP spent
+  const basePointsFromSpend = Math.round(subtotal * 10);
   const productBonusPoints = items.reduce((sum, item) => sum + item.product.points * item.quantity, 0);
   
   // Tier multiplier
   const multiplier = activeCustomer?.tier === 'diamond' ? 2 : activeCustomer?.tier === 'gold' ? 1.5 : activeCustomer?.tier === 'silver' ? 1.2 : 1;
   const totalEarnedPoints = Math.round((basePointsFromSpend + productBonusPoints) * multiplier);
 
-  // Points redemption calculation (10 points = 1 EGP discount)
+  // Points redemption calculation: 1000 points = 10 EGP discount (100 points = 1 EGP)
   const availablePoints = activeCustomer?.points || 0;
-  const maxPossibleDiscount = Math.floor(availablePoints / 10);
+  const maxPossibleDiscount = Math.floor((availablePoints / 1000) * 10);
   const pointsDiscount = usePoints ? Math.min(subtotal, maxPossibleDiscount) : 0;
-  const pointsToDeduct = pointsDiscount * 10;
+  const pointsToDeduct = usePoints ? availablePoints : 0;
   const finalTotal = Math.max(0, subtotal - pointsDiscount);
 
   const handleCheckout = (e: React.FormEvent) => {
@@ -91,14 +91,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     saveOrder(newOrder);
     syncSaveOrderToFirestore(newOrder);
 
-    // Update customer points
+    // Update customer points: if redeemed, points are zeroed out then new order points added
     if (activeCustomer) {
+      const remainingPoints = usePoints ? 0 : activeCustomer.points;
       const updatedCustomer: Customer = {
         ...activeCustomer,
         name: customerName.trim(),
         phone: customerPhone.trim(),
         address: customerAddress.trim() || activeCustomer.address,
-        points: Math.max(0, activeCustomer.points - pointsToDeduct + totalEarnedPoints),
+        points: Math.max(0, remainingPoints + totalEarnedPoints),
         totalOrders: activeCustomer.totalOrders + 1,
       };
       saveCustomer(updatedCustomer);
@@ -280,23 +281,25 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     </span>
                   </div>
                   <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                    تساوي {maxPossibleDiscount} ج.م
+                    تساوي خصم {maxPossibleDiscount} ج.م (كل 1000 نقطة = 10 ج.م)
                   </span>
                 </div>
 
                 {maxPossibleDiscount > 0 ? (
-                  <label className="flex items-center gap-2 cursor-pointer mt-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+                  <label className="flex items-center gap-2 cursor-pointer mt-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white/60 dark:bg-slate-900/60 p-2 rounded-xl border border-amber-300/40">
                     <input
                       type="checkbox"
                       checked={usePoints}
                       onChange={(e) => setUsePoints(e.target.checked)}
                       className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500"
                     />
-                    <span>خصم {pointsDiscount} جنيه من إجمالي الطلب باستخدام نقاطي</span>
+                    <span>
+                      استبدال وتصفير النقاط للحصول على خصم <strong>{pointsDiscount} جنيه</strong> فورياً
+                    </span>
                   </label>
                 ) : (
                   <p className="text-[11px] text-slate-500">
-                    اطلب هذا الأوردر واكسب <strong>+{totalEarnedPoints} نقطة</strong> لتستخدمها في طلبك القادم!
+                    اطلب هذا الأوردر واكسب <strong>+{totalEarnedPoints} نقطة</strong> (10 نقاط لكل 1 جنيه) لتستخدمها في طلبك القادم!
                   </p>
                 )}
               </div>

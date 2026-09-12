@@ -27,6 +27,7 @@ import {
   addBroadcastNotification,
   calculateTier,
   saveCustomer,
+  clearAllProducts,
 } from './services/storage';
 import {
   subscribeToFirestoreProducts,
@@ -35,6 +36,8 @@ import {
   syncDeleteProductFromFirestore,
   syncBroadcastNotificationToFirestore,
   syncSaveCustomerToFirestore,
+  syncClearAllFirestoreProducts,
+  syncBatchUploadProductsToFirestore,
 } from './services/firestoreSync';
 import { PHARMACY_WHATSAPP_NUMBER, createConsultationWhatsAppUrl } from './services/whatsapp';
 import { Navbar } from './components/Navbar';
@@ -87,13 +90,14 @@ export default function App() {
   // Real-time Firestore synchronization
   useEffect(() => {
     const unsubProducts = subscribeToFirestoreProducts((updatedProducts) => {
-      if (updatedProducts && updatedProducts.length > 0) {
+      if (updatedProducts) {
         setProducts(updatedProducts);
+        saveProducts(updatedProducts);
       }
     });
 
     const unsubNotifs = subscribeToFirestoreNotifications((updatedNotifs) => {
-      if (updatedNotifs && updatedNotifs.length > 0) {
+      if (updatedNotifs) {
         setNotifications(updatedNotifs);
       }
     });
@@ -182,6 +186,29 @@ export default function App() {
     setProducts(updated);
     saveProducts(updated);
     syncDeleteProductFromFirestore(id);
+  };
+
+  const handleUpdateProduct = (updatedProd: Product) => {
+    const updated = products.map((p) => (p.id === updatedProd.id ? updatedProd : p));
+    setProducts(updated);
+    saveProducts(updated);
+    syncAddProductToFirestore(updatedProd);
+  };
+
+  const handleClearAllProducts = async () => {
+    setProducts([]);
+    clearAllProducts();
+    await syncClearAllFirestoreProducts();
+  };
+
+  const handleBatchImportProducts = async (imported: Product[]) => {
+    const map = new Map<string, Product>();
+    products.forEach((p) => map.set(p.id, p));
+    imported.forEach((p) => map.set(p.id, p));
+    const merged = Array.from(map.values());
+    setProducts(merged);
+    saveProducts(merged);
+    await syncBatchUploadProductsToFirestore(imported);
   };
 
   const handleBroadcastNotification = (title: string, message: string, productId?: string) => {
@@ -602,6 +629,9 @@ export default function App() {
             products={products}
             onAddProduct={handleAddProduct}
             onDeleteProduct={handleDeleteProduct}
+            onUpdateProduct={handleUpdateProduct}
+            onClearAllProducts={handleClearAllProducts}
+            onBatchImportProducts={handleBatchImportProducts}
             onBroadcastNotification={handleBroadcastNotification}
           />
         )}

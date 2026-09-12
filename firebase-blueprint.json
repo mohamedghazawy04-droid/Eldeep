@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Pharmacy medicine, cosmetic or healthcare item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "image": { "type": "string" },
+        "description": { "type": "string" },
+        "inStock": { "type": "boolean" },
+        "requiresPrescription": { "type": "boolean" },
+        "dosage": { "type": "string" },
+        "badge": { "type": "string" },
+        "rating": { "type": "number" }
+      },
+      "required": ["id", "nameAr", "price", "category", "inStock"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "deliveryAddress": { "type": "string" },
+        "notes": { "type": "string" },
+        "totalPrice": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "customerName", "customerPhone", "totalPrice", "createdAt", "status"]
+    },
+    "Prescription": {
+      "title": "Prescription",
+      "description": "Customer prescription upload",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "deliveryAddress": { "type": "string" },
+        "notes": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "imageName": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "customerName", "customerPhone", "createdAt", "status"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Registered pharmacy customer and loyalty profile",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "points": { "type": "number" },
+        "tier": { "type": "string" },
+        "totalOrders": { "type": "number" },
+        "joinedDate": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "phone", "points", "tier"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Broadcast or status notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "date": { "type": "string" },
+        "read": { "type": "boolean" },
+        "type": { "type": "string" },
+        "productId": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "title", "message", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "#/entities/Product",
+      "description": "Store products catalog"
+    },
+    "/orders/{orderId}": {
+      "schema": "#/entities/Order",
+      "description": "Customer purchase orders"
+    },
+    "/prescriptions/{prescriptionId}": {
+      "schema": "#/entities/Prescription",
+      "description": "Uploaded prescriptions"
+    },
+    "/customers/{customerPhone}": {
+      "schema": "#/entities/Customer",
+      "description": "Customer accounts and loyalty points"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "#/entities/Notification",
+      "description": "Broadcast announcements and alerts"
+    }
+  }
+}
