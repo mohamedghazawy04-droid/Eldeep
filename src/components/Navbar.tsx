@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Moon, Sun, ShoppingCart, Bell, Award, Camera, Lock, PhoneCall } from 'lucide-react';
+import { Search, Moon, Sun, ShoppingCart, Bell, Award, Camera, Lock, PhoneCall, HardDrive } from 'lucide-react';
 import { Logo } from './Logo';
 import { Customer } from '../types';
 import { PHARMACY_WHATSAPP_NUMBER } from '../services/whatsapp';
@@ -17,6 +17,7 @@ interface NavbarProps {
   onOpenLoyalty: () => void;
   onOpenPrescription: () => void;
   onOpenAdmin: () => void;
+  onOpenGoogleDrive?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -32,6 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenLoyalty,
   onOpenPrescription,
   onOpenAdmin,
+  onOpenGoogleDrive,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 transition-colors font-cairo">
@@ -154,6 +156,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               )}
             </button>
+
+            {/* Google Drive Cloud Sync */}
+            {onOpenGoogleDrive && (
+              <button
+                id="google-drive-nav-btn"
+                onClick={onOpenGoogleDrive}
+                className="p-2 sm:p-2.5 rounded-2xl text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-slate-800 transition-colors"
+                title="Google Drive • النسخ الاحتياطي والمزامنة السحابية"
+              >
+                <HardDrive className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+              </button>
+            )}
 
             {/* Theme Toggle (Day/Night Mode) */}
             <button

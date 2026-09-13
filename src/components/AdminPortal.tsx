@@ -40,10 +40,15 @@ import {
   Smartphone,
   Server,
   Zap,
+  HardDrive,
+  CloudUpload,
+  Upload,
+  ImageIcon,
 } from 'lucide-react';
 import { Product, Customer, AppNotification, ProductCategory } from '../types';
 import { CATEGORIES } from '../data/initialData';
 import { GeminiProductStudio } from './GeminiProductStudio';
+import { GoogleDriveModal } from './GoogleDriveModal';
 import {
   syncAddProductToFirestore,
   syncDeleteProductFromFirestore,
@@ -97,7 +102,7 @@ interface AdminPortalProps {
 const DEFAULT_GITHUB_APPS: GitHubAppItem[] = [
   {
     id: 'app-eldeeb-pharmacy',
-    name: 'صيدلية د/ أحمد الديب الإلكترونية',
+    name: 'صيدلية الديب الإلكترونية',
     nameEn: 'El-Deeb Pharmacy Store & PWA',
     repo: 'mohamedhgas4444/eldeeb-pharmacy',
     branch: 'main',
@@ -105,12 +110,12 @@ const DEFAULT_GITHUB_APPS: GitHubAppItem[] = [
     description: 'المتجر الإلكتروني الرئيسي، كتالوج الأدوية الذكي، طلبات الروشتات، ونظام الولاء السحابي.',
     liveUrl: window.location.origin,
     githubUrl: 'https://github.com/mohamedhgas4444/eldeeb-pharmacy',
-    lastCommitMessage: 'feat(vespa): Add authentic funny Vespa delivery animation and private hub',
+    lastCommitMessage: 'feat: Update pharmacy branding and checkout flows',
     lastCommitHash: '8f2a9c1',
     lastCommitTime: 'منذ دقيقتين',
     status: 'active',
     config: {
-      appName: 'صيدلية د/ أحمد الديب',
+      appName: 'صيدلية الديب',
       version: '2.4.0',
       environment: 'production',
       maintenanceMode: false,
@@ -124,7 +129,7 @@ const DEFAULT_GITHUB_APPS: GitHubAppItem[] = [
       },
       rawConfigJson: JSON.stringify(
         {
-          name: 'صيدلية د/ أحمد الديب',
+          name: 'صيدلية الديب',
           version: '2.4.0',
           env: 'production',
           whatsapp: '01009097378',
@@ -285,7 +290,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [authError, setAuthError] = useState('');
 
   // Active Hub Navigation Tab
-  const [activeTab, setActiveTab] = useState<'github' | 'products' | 'broadcast' | 'customers' | 'security'>('github');
+  const [activeTab, setActiveTab] = useState<'github' | 'products' | 'broadcast' | 'customers' | 'drive'>('github');
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
 
   // GitHub Connected Apps State
   const [githubApps, setGithubApps] = useState<GitHubAppItem[]>(() => {
@@ -829,6 +835,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             >
               <Users className="w-4 h-4" />
               <span>العملاء ونقاط الولاء ({customersList.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('drive')}
+              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+                activeTab === 'drive'
+                  ? 'bg-cyan-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <HardDrive className="w-4 h-4" />
+              <span>Google Drive والنسخ السحابي</span>
             </button>
           </div>
 
@@ -1447,6 +1465,73 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
             </div>
           )}
+
+          {/* ================= TAB 5: GOOGLE DRIVE CLOUD BACKUP ================= */}
+          {activeTab === 'drive' && (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/30 text-sky-400 flex items-center justify-center">
+                    <HardDrive className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <span>النسخ الاحتياطي والمزامنة عبر Google Drive</span>
+                      <span className="text-[10px] bg-sky-950 text-sky-300 border border-sky-800 px-2 py-0.5 rounded-full font-mono font-bold">
+                        Workspace OAuth
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      حفظ قاعدة بيانات صيدلية الديب (الأدوية، الطلبات، الروشتات، والعملاء) بشكل آمن ومستمر على حساب Google Drive الخاص بك.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsDriveModalOpen(true)}
+                  className="px-4 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 text-white rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 transition-all active:scale-95"
+                >
+                  <CloudUpload className="w-4 h-4" />
+                  <span>فتح مدير Google Drive والنسخ الاحتياطي</span>
+                </button>
+              </div>
+
+              {/* Data Summary Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-4 bg-slate-800/60 border border-slate-700/60 rounded-2xl text-center">
+                  <div className="text-xs text-slate-400 mb-1">الأدوية والمنتجات</div>
+                  <div className="text-xl font-mono font-black text-sky-400">{products.length}</div>
+                </div>
+                <div className="p-4 bg-slate-800/60 border border-slate-700/60 rounded-2xl text-center">
+                  <div className="text-xs text-slate-400 mb-1">الطلبات المسجلة</div>
+                  <div className="text-xl font-mono font-black text-emerald-400">{getStoredOrders().length}</div>
+                </div>
+                <div className="p-4 bg-slate-800/60 border border-slate-700/60 rounded-2xl text-center">
+                  <div className="text-xs text-slate-400 mb-1">العملاء ونقاط الولاء</div>
+                  <div className="text-xl font-mono font-black text-amber-400">{customersList.length}</div>
+                </div>
+                <div className="p-4 bg-slate-800/60 border border-slate-700/60 rounded-2xl text-center">
+                  <div className="text-xs text-slate-400 mb-1">الروشتات الطبية</div>
+                  <div className="text-xl font-mono font-black text-purple-400">{getStoredPrescriptions().length}</div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-300">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>تم تفعيل تصاريح Google Workspace Drive الرسمية (drive.file و drive.readonly).</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsDriveModalOpen(true)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded-lg text-xs font-bold border border-slate-700"
+                >
+                  استعراض الملفات المحفوظة
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1712,6 +1797,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             setImage(url);
             setIsStudioOpen(false);
           }}
+        />
+      )}
+
+      {/* Google Drive Cloud Modal */}
+      {isDriveModalOpen && (
+        <GoogleDriveModal
+          isOpen={isDriveModalOpen}
+          onClose={() => setIsDriveModalOpen(false)}
+          products={products}
+          orders={getStoredOrders()}
+          customers={customersList}
+          prescriptions={getStoredPrescriptions()}
         />
       )}
     </div>

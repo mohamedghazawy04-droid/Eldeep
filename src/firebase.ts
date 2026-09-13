@@ -19,7 +19,7 @@ export const firebaseConfig = {
   appId: metaEnv.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId || '',
 };
 
-export const databaseId = firebaseAppletConfig.firestoreDatabaseId || '(default)';
+export const databaseId = (firebaseAppletConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId || '(default)';
 
 let appInstance;
 if (!getApps().length) {

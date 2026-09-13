@@ -68,6 +68,8 @@ export interface AppNotification {
   productId?: string;
 }
 
+export type PaymentMethod = 'cash' | 'instapay' | 'visa';
+
 export interface OrderRecord {
   id: string;
   customerName: string;
@@ -78,6 +80,7 @@ export interface OrderRecord {
   discount: number;
   pointsUsed: number;
   pointsEarned: number;
+  paymentMethod?: PaymentMethod;
   date: string;
   status: 'sent_whatsapp' | 'confirmed' | 'delivered';
   notes?: string;

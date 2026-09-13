@@ -1,6 +1,6 @@
 {
   "name": "صيدلية الديب - El Deeb Pharmacy",
-  "description": "منصة صيدليات الديب الرقمية: تسوق الأدوية والمستلزمات، إرسال الروشتة عبر الواتساب، نظام نقاط الولاء، والتحكم الإداري الكامل.",
+  "description": "منصة صيدليات الديب الرقمية: تسوق الأدوية والمستلزمات، إرسال الروشتة عبر الواتساب، نظام نقاط الولاء، النسخ الاحتياطي على Google Drive، والتحكم الإداري الكامل.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

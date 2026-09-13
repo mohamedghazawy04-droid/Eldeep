@@ -81,7 +81,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
               <h3 className="font-extrabold text-sm sm:text-base">
-                صيدليات د/ أحمد الديب - خدمة التوصيل 24/7
+                صيدليات الديب - خدمة التوصيل 24/7
               </h3>
             </div>
             <button

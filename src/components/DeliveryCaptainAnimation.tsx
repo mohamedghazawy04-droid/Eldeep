@@ -46,7 +46,7 @@ export const DeliveryCaptainAnimation: React.FC<DeliveryCaptainAnimationProps> =
         <div className="w-32 sm:w-40 h-3 bg-gradient-to-r from-teal-600 via-sky-600 to-emerald-600 rounded-t-lg shadow-sm" />
         <div className="w-28 sm:w-36 h-16 bg-slate-800/90 border border-slate-700/80 rounded-b-xl flex flex-col items-center justify-between p-2 shadow-xl backdrop-blur-xs">
           <div className="text-[9px] font-black text-cyan-300 tracking-wider font-mono">
-            صيدلية د/ أحمد الديب
+            صيدلية الديب
           </div>
           {/* Pulsing Neon Green Medical Cross */}
           <motion.div

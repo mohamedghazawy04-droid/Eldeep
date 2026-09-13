@@ -1,6 +1,12 @@
-import { CartItem, Customer, Product } from '../types';
+import { CartItem, Customer, Product, PaymentMethod } from '../types';
 
 export const PHARMACY_WHATSAPP_NUMBER = '201009097378'; // International Egyptian format
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash: '💵 نقدي عند الاستلام (Cash on Delivery)',
+  instapay: '⚡ انستاباي (InstaPay)',
+  visa: '💳 فيزا / بطاقة بنكية (Visa / Card)',
+};
 
 /**
  * Creates WhatsApp URL for sending an order directly to the pharmacy
@@ -10,6 +16,7 @@ export function createOrderWhatsAppUrl(
   customer: Partial<Customer>,
   pointsDiscount: number,
   earnedPoints: number,
+  paymentMethod: PaymentMethod = 'cash',
   notes?: string
 ): string {
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
@@ -30,6 +37,10 @@ export function createOrderWhatsAppUrl(
     message += `${index + 1}. *${item.product.nameAr}*\n`;
     message += `   - الكمية: ${item.quantity} | السعر: ${item.product.price} ج.م | الإجمالي: ${item.product.price * item.quantity} ج.م\n`;
   });
+
+  message += `━━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `💳 *طريقة الدفع المختارة:*\n`;
+  message += `• ${PAYMENT_METHOD_LABELS[paymentMethod] || paymentMethod}\n`;
 
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   message += `💰 *الحساب الإجمالي:*\n`;

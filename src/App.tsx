@@ -28,6 +28,9 @@ import {
   calculateTier,
   saveCustomer,
   clearAllProducts,
+  getStoredOrders,
+  getStoredAllCustomers,
+  getStoredPrescriptions,
 } from './services/storage';
 import {
   subscribeToFirestoreProducts,
@@ -53,6 +56,7 @@ import { AdminModal } from './components/AdminModal';
 import { AdminPortal } from './components/AdminPortal';
 import { CustomerWelcomeLoginModal } from './components/CustomerWelcomeLoginModal';
 import { ProductImageZoomModal } from './components/ProductImageZoomModal';
+import { GoogleDriveModal } from './components/GoogleDriveModal';
 import { MascotPet } from './components/MascotPet';
 import { Logo } from './components/Logo';
 
@@ -127,6 +131,7 @@ export default function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isGoogleDriveOpen, setIsGoogleDriveOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Customer Welcome Login Modal (opens when link is clicked if not logged in)
@@ -359,6 +364,7 @@ export default function App() {
         activeCustomer={activeCustomer}
         onOpenLoyalty={() => setIsLoyaltyOpen(true)}
         onOpenPrescription={() => setIsPrescriptionOpen(true)}
+        onOpenGoogleDrive={() => setIsGoogleDriveOpen(true)}
         onOpenAdmin={() => {
           window.location.hash = 'hub';
           setViewMode('admin');
@@ -592,6 +598,11 @@ export default function App() {
                     إشعارات المنتجات الجديدة
                   </button>
                 </li>
+                <li>
+                  <button onClick={() => setIsGoogleDriveOpen(true)} className="hover:text-sky-600 transition-colors flex items-center gap-1">
+                    <span>النسخ السحابي Google Drive</span>
+                  </button>
+                </li>
               </ul>
             </div>
 
@@ -763,6 +774,19 @@ export default function App() {
             onClearAllProducts={handleClearAllProducts}
             onBatchImportProducts={handleBatchImportProducts}
             onBroadcastNotification={handleBroadcastNotification}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isGoogleDriveOpen && (
+          <GoogleDriveModal
+            isOpen={isGoogleDriveOpen}
+            onClose={() => setIsGoogleDriveOpen(false)}
+            products={products}
+            orders={getStoredOrders()}
+            customers={getStoredAllCustomers()}
+            prescriptions={getStoredPrescriptions()}
           />
         )}
       </AnimatePresence>
