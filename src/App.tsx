@@ -67,6 +67,7 @@ import {
   upsertSupabaseProduct,
   upsertSupabaseProducts,
 } from './services/supabaseProducts';
+import { upsertSupabaseCustomer } from './services/supabaseCustomers';
 
 export default function App() {
   // State
@@ -292,7 +293,9 @@ export default function App() {
       };
       setActiveCustomer(updated);
       saveCustomer(updated);
-      syncSaveCustomerToFirestore(updated);
+      upsertSupabaseCustomer(updated).then((result) => {
+        if (!result.success) syncSaveCustomerToFirestore(updated);
+      });
     }
   };
 

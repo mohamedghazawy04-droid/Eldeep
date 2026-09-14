@@ -5,6 +5,7 @@ import { Customer } from '../types';
 import { DeliveryCaptainAnimation } from './DeliveryCaptainAnimation';
 import { calculateTier, saveCustomer, getStoredAllCustomers } from '../services/storage';
 import { syncSaveCustomerToFirestore, fetchCustomerFromFirestore } from '../services/firestoreSync';
+import { fetchSupabaseCustomer, upsertSupabaseCustomer } from '../services/supabaseCustomers';
 
 interface CustomerWelcomeLoginModalProps {
   isOpen: boolean;
@@ -39,8 +40,8 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
         setDetectedAccountMsg(`مرحباً بعودتك! تم العثور على رصيدك المحفوظ (${existing.points} نقطة ولاء)`);
         return;
       }
-      // Check cloud Firestore
-      const cloudCust = await fetchCustomerFromFirestore(clean);
+      // Check the shared Supabase account first, then keep Firebase as fallback.
+      const cloudCust = (await fetchSupabaseCustomer(clean)) || (await fetchCustomerFromFirestore(clean));
       if (cloudCust) {
         if (!name) setName(cloudCust.name);
         if (!address && cloudCust.address) setAddress(cloudCust.address);
@@ -65,7 +66,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
     const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
     const allLocal = getStoredAllCustomers();
     const existingLocal = allLocal.find((c) => c.phone.replace(/[^\d+]/g, '') === cleanPhone);
-    const existingCloud = await fetchCustomerFromFirestore(cleanPhone);
+    const existingCloud = (await fetchSupabaseCustomer(cleanPhone)) || (await fetchCustomerFromFirestore(cleanPhone));
     const matched = existingCloud || existingLocal;
 
     // Preserve points if account existed! Never wipe out hard-earned points!
@@ -82,7 +83,8 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
     };
 
     saveCustomer(finalCustomer);
-    syncSaveCustomerToFirestore(finalCustomer);
+    const cloudSave = await upsertSupabaseCustomer(finalCustomer);
+    if (!cloudSave.success) syncSaveCustomerToFirestore(finalCustomer);
 
     setTimeout(() => {
       setIsSubmitting(false);

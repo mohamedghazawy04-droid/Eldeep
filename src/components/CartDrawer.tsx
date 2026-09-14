@@ -24,6 +24,7 @@ import { CartItem, Customer, PaymentMethod } from '../types';
 import { createOrderWhatsAppUrl } from '../services/whatsapp';
 import { saveOrder, saveCustomer, getStoredAllCustomers } from '../services/storage';
 import { syncSaveOrderToFirestore, syncSaveCustomerToFirestore } from '../services/firestoreSync';
+import { upsertSupabaseCustomer, upsertSupabaseOrder } from '../services/supabaseCustomers';
 import confetti from 'canvas-confetti';
 
 interface CartDrawerProps {
@@ -218,7 +219,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     };
 
     saveOrder(newOrder);
-    syncSaveOrderToFirestore(newOrder);
+    upsertSupabaseOrder(newOrder).then((result) => {
+      if (!result.success) syncSaveOrderToFirestore(newOrder);
+    });
 
     // Update customer points: strictly deduct used points and credit newly earned points
     let updatedCustomerObj: Customer;
@@ -247,7 +250,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
 
     saveCustomer(updatedCustomerObj);
-    syncSaveCustomerToFirestore(updatedCustomerObj);
+    upsertSupabaseCustomer(updatedCustomerObj).then((result) => {
+      if (!result.success) syncSaveCustomerToFirestore(updatedCustomerObj);
+    });
     onCustomerUpdated?.(updatedCustomerObj);
 
     // Launch WhatsApp with detailed loyalty points audit
