@@ -73,6 +73,7 @@ import {
 import { optimizeProductImage, estimateProductsStorageSize } from '../utils/imageOptimizer';
 import { GeminiProductStudio } from './GeminiProductStudio';
 import { verifyAdminPin } from '../services/adminSecurity';
+import { clearSharedLogo, saveSharedLogo } from '../services/siteSettings';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -1736,6 +1737,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               if (result) {
                                 setCurrentLogo(result);
                                 saveStoredLogo(result);
+                                saveSharedLogo(result).catch((error) => console.error('Shared logo save failed:', error));
                                 window.dispatchEvent(new Event('eldeeb_logo_updated'));
                                 setLogoSaveSuccess(true);
                                 setTimeout(() => setLogoSaveSuccess(false), 3000);
@@ -1756,6 +1758,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         const defaultUrl = '/eldeeb_logo.jpg';
                         setCurrentLogo(defaultUrl);
                         saveStoredLogo(null);
+                        clearSharedLogo().catch((error) => console.error('Shared logo reset failed:', error));
                         window.dispatchEvent(new Event('eldeeb_logo_updated'));
                         setLogoSaveSuccess(true);
                         setTimeout(() => setLogoSaveSuccess(false), 3000);

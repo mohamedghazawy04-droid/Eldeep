@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getStoredLogo } from '../services/storage';
+import { fetchSharedLogo } from '../services/siteSettings';
 
 interface LogoProps {
   className?: string;
@@ -25,6 +26,9 @@ export const Logo: React.FC<LogoProps> = ({
     };
 
     window.addEventListener('eldeeb_logo_updated', handleLogoUpdated);
+    fetchSharedLogo().then((sharedLogo) => {
+      if (sharedLogo) setLogoSrc(sharedLogo);
+    });
     return () => {
       window.removeEventListener('eldeeb_logo_updated', handleLogoUpdated);
     };
@@ -98,4 +102,3 @@ export const Logo: React.FC<LogoProps> = ({
     </div>
   );
 };
-
