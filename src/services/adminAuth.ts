@@ -19,3 +19,14 @@ export async function signOutManager(): Promise<void> {
   await supabase.auth.signOut();
   sessionStorage.removeItem('eldeeb_hub_auth');
 }
+
+export async function signInManagerWithGoogle(): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin + '/#hub',
+      queryParams: { prompt: 'select_account' },
+    },
+  });
+  return error ? { success: false, error: error.message } : { success: true };
+}

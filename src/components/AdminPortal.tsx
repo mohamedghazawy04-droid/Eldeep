@@ -57,7 +57,7 @@ import {
   syncBroadcastNotificationToFirestore,
 } from '../services/firestoreSync';
 import { getStoredAllCustomers, getStoredOrders, getStoredPrescriptions } from '../services/storage';
-import { getManagerSession, requestManagerMagicLink, signOutManager, MANAGER_EMAIL } from '../services/adminAuth';
+import { getManagerSession, requestManagerMagicLink, signInManagerWithGoogle, signOutManager, MANAGER_EMAIL } from '../services/adminAuth';
 
 export interface GitHubAppItem {
   id: string;
@@ -371,11 +371,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Request a one-time manager login link; no password is stored in the frontend.
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await requestManagerMagicLink();
+    const result = await signInManagerWithGoogle();
     if (result.success) {
       setAuthError('');
-      setAuthNotice(`تم إرسال رابط دخول آمن إلى ${MANAGER_EMAIL}`);
-    } else setAuthError(result.error || 'تعذر إرسال رابط الدخول.');
+      setAuthNotice(`سيتم تحويلك إلى Google. يجب استخدام الحساب ${MANAGER_EMAIL}`);
+    } else setAuthError(result.error || 'تعذر تشغيل تسجيل الدخول عبر Google. فعّل Google Provider في Supabase.');
+  };
+
+  const handleMagicLink = async () => {
+    const result = await requestManagerMagicLink();
+    if (result.success) setAuthNotice(`تم إرسال رابط دخول آمن إلى ${MANAGER_EMAIL}`);
+    else setAuthError(result.error || 'تعذر إرسال رابط الدخول.');
   };
 
   const handleLogout = () => {
@@ -799,7 +805,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 type="submit"
                 className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-cyan-500/20 transition-all active:scale-98"
               >
-                إرسال رابط الدخول الآمن
+                الدخول باستخدام Google بأمان
+              </button>
+              <button
+                type="button"
+                onClick={handleMagicLink}
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl font-bold text-xs transition-all"
+              >
+                أو إرسال رابط دخول إلى البريد
               </button>
             </form>
           </motion.div>
