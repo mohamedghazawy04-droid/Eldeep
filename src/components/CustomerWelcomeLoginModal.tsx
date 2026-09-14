@@ -5,7 +5,7 @@ import { Customer } from '../types';
 import { DeliveryCaptainAnimation } from './DeliveryCaptainAnimation';
 import { calculateTier, saveCustomer, getStoredAllCustomers } from '../services/storage';
 import { syncSaveCustomerToFirestore, fetchCustomerFromFirestore } from '../services/firestoreSync';
-import { fetchSupabaseCustomer, sendCustomerOtp, upsertSupabaseCustomer, verifyCustomerOtp } from '../services/supabaseCustomers';
+import { fetchSupabaseCustomer, sendCustomerEmailOtp, upsertSupabaseCustomer, verifyCustomerEmailOtp } from '../services/supabaseCustomers';
 
 interface CustomerWelcomeLoginModalProps {
   isOpen: boolean;
@@ -20,6 +20,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
 }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,9 +34,6 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
   // Auto-detect existing account when typing phone number to reassure customer
   const handlePhoneChange = async (val: string) => {
     setPhone(val);
-    setOtp('');
-    setOtpSent(false);
-    setOtpVerified(false);
     const clean = val.replace(/[^\d+]/g, '');
     if (clean.length >= 10) {
       const allLocal = getStoredAllCustomers();
@@ -60,29 +58,36 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
     }
   };
 
+  const handleEmailChange = (val: string) => {
+    setEmail(val);
+    setOtp('');
+    setOtpSent(false);
+    setOtpVerified(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim()) {
-      alert('يرجى كتابة الاسم ورقم الهاتف للبدء');
+    if (!name.trim() || !email.trim()) {
+      alert('يرجى كتابة الاسم والبريد الإلكتروني للبدء');
       return;
     }
 
     setIsSubmitting(true);
 
-    const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
+    const cleanEmail = email.trim().toLowerCase();
     if (!otpVerified) {
       if (!otpSent) {
-        const sent = await sendCustomerOtp(cleanPhone);
+        const sent = await sendCustomerEmailOtp(cleanEmail);
         setIsSubmitting(false);
         if (!sent.success) {
-          alert(`تعذر إرسال رمز التحقق: ${sent.error || 'تحقق من إعداد SMS في Supabase'}`);
+          alert(`تعذر إرسال رمز التحقق: ${sent.error || 'تحقق من إعداد Email Auth في Supabase'}`);
           return;
         }
         setOtpSent(true);
-        alert('تم إرسال رمز تحقق SMS إلى هاتفك. اكتب الرمز ثم اضغط متابعة.');
+        alert('تم إرسال رمز تحقق إلى بريدك الإلكتروني. اكتب الرمز ثم اضغط متابعة.');
         return;
       }
-      const verified = await verifyCustomerOtp(cleanPhone, otp.trim());
+      const verified = await verifyCustomerEmailOtp(cleanEmail, otp.trim());
       if (!verified.success) {
         setIsSubmitting(false);
         alert('رمز التحقق غير صحيح أو انتهت صلاحيته.');
@@ -91,8 +96,8 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
       setOtpVerified(true);
     }
     const allLocal = getStoredAllCustomers();
-    const existingLocal = allLocal.find((c) => c.phone.replace(/[^\d+]/g, '') === cleanPhone);
-    const existingCloud = (await fetchSupabaseCustomer(cleanPhone)) || (await fetchCustomerFromFirestore(cleanPhone));
+    const existingLocal = allLocal.find((c) => c.email?.toLowerCase() === cleanEmail);
+    const existingCloud = (await fetchSupabaseCustomer(phone)) || (await fetchCustomerFromFirestore(phone));
     const matched = existingCloud || existingLocal;
 
     // Preserve points if account existed! Never wipe out hard-earned points!
@@ -101,6 +106,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
       id: matched?.id || 'cust-' + Date.now(),
       name: name.trim() || matched?.name || 'عميل صيدلية الديب',
       phone: phone.trim(),
+      email: cleanEmail,
       address: address.trim() || matched?.address || 'العنوان يحدد عند الطلب',
       points: finalPoints,
       tier: calculateTier(finalPoints),
@@ -214,6 +220,17 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
                   />
                   <Phone className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
                 </div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 mt-3">
+                  البريد الإلكتروني للتحقق الآمن *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => handleEmailChange(e.target.value)}
+                  placeholder="name@example.com"
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl text-xs border border-slate-200 dark:border-slate-700 focus:border-sky-500 outline-none"
+                />
                 {detectedAccountMsg && (
                   <div className="mt-1.5 p-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -223,7 +240,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
                 {otpSent && !otpVerified && (
                   <div className="mt-2">
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      رمز التحقق المرسل إلى الهاتف
+                      رمز التحقق المرسل إلى البريد الإلكتروني
                     </label>
                     <input
                       type="text"
@@ -263,7 +280,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
                   className="w-full py-3 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white rounded-2xl font-bold text-xs sm:text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>{isSubmitting ? 'جاري التحقق...' : otpSent && !otpVerified ? 'تأكيد رمز الهاتف' : 'إرسال رمز التحقق للهاتف'}</span>
+                  <span>{isSubmitting ? 'جاري التحقق...' : otpSent && !otpVerified ? 'تأكيد رمز البريد' : 'إرسال رمز التحقق للبريد'}</span>
                 </button>
 
                 <button

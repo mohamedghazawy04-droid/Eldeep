@@ -12,6 +12,19 @@ export function customerAuthPhone(phone: string): string {
   return normalizePhone(phone);
 }
 
+export async function sendCustomerEmailOtp(email: string): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase.auth.signInWithOtp({
+    email: email.trim().toLowerCase(),
+    options: { shouldCreateUser: true, emailRedirectTo: window.location.origin },
+  });
+  return error ? { success: false, error: error.message } : { success: true };
+}
+
+export async function verifyCustomerEmailOtp(email: string, token: string): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token, type: 'email' });
+  return error ? { success: false, error: error.message } : { success: true };
+}
+
 export async function sendCustomerOtp(phone: string): Promise<{ success: boolean; error?: string }> {
   const { error } = await supabase.auth.signInWithOtp({ phone: normalizePhone(phone) });
   return error ? { success: false, error: error.message } : { success: true };
@@ -27,6 +40,7 @@ function customerToRow(customer: Customer) {
     id: customer.id,
     name: customer.name,
     phone: normalizePhone(customer.phone),
+    email: customer.email?.trim().toLowerCase() || null,
     address: customer.address || '',
     points: customer.points,
     tier: customer.tier,
@@ -41,6 +55,7 @@ function rowToCustomer(row: any): Customer {
     id: row.id,
     name: row.name,
     phone: row.phone,
+    email: row.email || undefined,
     address: row.address || '',
     points: Number(row.points || 0),
     tier: row.tier || 'bronze',
@@ -60,7 +75,7 @@ export async function fetchSupabaseCustomer(phone: string): Promise<Customer | n
 export async function upsertSupabaseCustomer(customer: Customer): Promise<{ success: boolean; error?: string }> {
   if (!isSupabaseReady) return { success: false, error: 'Supabase غير مُعد' };
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: 'يجب التحقق من رقم الهاتف أولاً' };
+  if (!user) return { success: false, error: 'يجب التحقق من البريد الإلكتروني أولاً' };
   const { error } = await supabase.from('customers').upsert({ ...customerToRow(customer), user_id: user.id }, { onConflict: 'phone' });
   return error ? { success: false, error: error.message } : { success: true };
 }
@@ -68,10 +83,11 @@ export async function upsertSupabaseCustomer(customer: Customer): Promise<{ succ
 export async function upsertSupabaseOrder(order: OrderRecord): Promise<{ success: boolean; error?: string }> {
   if (!isSupabaseReady) return { success: false, error: 'Supabase غير مُعد' };
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: 'يجب التحقق من رقم الهاتف أولاً' };
+  if (!user) return { success: false, error: 'يجب التحقق من البريد الإلكتروني أولاً' };
   const { error } = await supabase.from('orders').upsert({
     id: order.id,
     customer_phone: normalizePhone(order.customerPhone),
+    customer_email: order.customerEmail || null,
     customer_name: order.customerName,
     customer_address: order.customerAddress,
     items: order.items,
