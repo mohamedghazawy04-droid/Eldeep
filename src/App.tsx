@@ -61,6 +61,12 @@ import { GoogleDriveModal } from './components/GoogleDriveModal';
 import { MascotPet } from './components/MascotPet';
 import { Logo } from './components/Logo';
 import { MobileBottomBar } from './components/MobileBottomBar';
+import {
+  deleteSupabaseProduct,
+  subscribeToSupabaseProducts,
+  upsertSupabaseProduct,
+  upsertSupabaseProducts,
+} from './services/supabaseProducts';
 
 export default function App() {
   // State
@@ -180,6 +186,19 @@ export default function App() {
     };
   }, []);
 
+  // Shared Supabase catalog: all visitors receive the same products in realtime.
+  useEffect(() => {
+    return subscribeToSupabaseProducts((updatedProducts) => {
+      if (updatedProducts.length === 0 && products.length > 0) {
+        // First admin visit: migrate the existing browser catalog instead of wiping it.
+        upsertSupabaseProducts(products).catch(() => {});
+        return;
+      }
+      setProducts(updatedProducts);
+      saveProducts(updatedProducts);
+    });
+  }, []);
+
   // Persist cart
   useEffect(() => {
     try {
@@ -282,6 +301,8 @@ export default function App() {
     const updated = [newProd, ...products];
     setProducts(updated);
     saveProducts(updated);
+    const result = await upsertSupabaseProduct(newProd);
+    if (result.success) return { success: true, isOnline: true };
     return syncAddProductToFirestore(newProd);
   };
 
@@ -289,13 +310,17 @@ export default function App() {
     const updated = products.filter((p) => p.id !== id);
     setProducts(updated);
     saveProducts(updated);
-    syncDeleteProductFromFirestore(id);
+    deleteSupabaseProduct(id).then((result) => {
+      if (!result.success) syncDeleteProductFromFirestore(id);
+    });
   };
 
   const handleUpdateProduct = async (updatedProd: Product) => {
     const updated = products.map((p) => (p.id === updatedProd.id ? updatedProd : p));
     setProducts(updated);
     saveProducts(updated);
+    const result = await upsertSupabaseProduct(updatedProd);
+    if (result.success) return { success: true, isOnline: true };
     return syncAddProductToFirestore(updatedProd);
   };
 
