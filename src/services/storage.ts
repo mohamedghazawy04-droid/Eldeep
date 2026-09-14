@@ -349,7 +349,7 @@ export function getAdminPin(): string {
   } catch {
     // ignore
   }
-  return 'MOhager191995';
+  return '__HASHED_DEFAULT__';
 }
 
 export function setAdminPin(newPin: string): void {
@@ -396,4 +396,3 @@ export function saveStoredLogo(logoUrl: string | null): void {
     console.error('Failed to save logo', e);
   }
 }
-

@@ -72,6 +72,7 @@ import {
 } from '../services/firestoreSync';
 import { optimizeProductImage, estimateProductsStorageSize } from '../utils/imageOptimizer';
 import { GeminiProductStudio } from './GeminiProductStudio';
+import { verifyAdminPin } from '../services/adminSecurity';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -189,10 +190,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const correctPin = getAdminPin();
-    if (pin.trim() === 'MOhager191995' || pin.trim() === correctPin) {
+    if (await verifyAdminPin(pin, correctPin)) {
       setIsAuthenticated(true);
     } else {
       alert('كلمة المرور غير صحيحة');
@@ -1786,7 +1787,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       إعدادات كلمة مرور لوحة التحكم
                     </h4>
                     <p className="text-xs text-slate-500">
-                      كلمة المرور الحالية المعتمدة هي: <span className="font-mono font-bold text-sky-600">MOhager191995</span>
+                      يتم التحقق من كلمة المرور محليًا دون عرضها أو كشفها داخل لوحة التحكم.
                     </p>
                   </div>
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { verifyAdminPin } from '../services/adminSecurity';
 import { Search, Moon, Sun, ShoppingCart, Bell, Award, Camera, Lock, PhoneCall, HardDrive, ShieldCheck, X } from 'lucide-react';
 import { Logo } from './Logo';
 import { Customer } from '../types';
@@ -67,10 +68,10 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
   };
 
-  const handleVerifyAdminBackup = (e: React.FormEvent) => {
+  const handleVerifyAdminBackup = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPin = adminPinInput.trim();
-    if (cleanPin === 'MOhager191995') {
+    if (await verifyAdminPin(cleanPin)) {
       sessionStorage.setItem('eldeeb_hub_auth', 'true');
       setShowAdminAuthModal(false);
       onOpenGoogleDrive?.();

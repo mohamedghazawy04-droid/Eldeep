@@ -57,6 +57,7 @@ import {
   syncBroadcastNotificationToFirestore,
 } from '../services/firestoreSync';
 import { getStoredAllCustomers, getStoredOrders, getStoredPrescriptions } from '../services/storage';
+import { verifyAdminPin } from '../services/adminSecurity';
 
 export interface GitHubAppItem {
   id: string;
@@ -282,7 +283,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   onBroadcastNotification,
   onBackToStore,
 }) => {
-  // STRICT AUTHENTICATION - STRICT PASSWORD: MOhager191995 (ABSOLUTELY ZERO HINTS)
+  // Manager authentication is verified through the centralized hashed PIN checker.
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('eldeeb_hub_auth') === 'true';
   });
@@ -362,12 +363,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     }
   };
 
-  // Login handler strictly against MOhager191995 with ZERO hints!
-  const handleLogin = (e: React.FormEvent) => {
+  // Verify the manager PIN without storing the plaintext value in the component.
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const MASTER_PASSWORD = 'MOhager191995';
 
-    if (pin.trim() === MASTER_PASSWORD) {
+    if (await verifyAdminPin(pin)) {
       setIsAuthenticated(true);
       sessionStorage.setItem('eldeeb_hub_auth', 'true');
       setAuthError('');
@@ -724,7 +724,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
       {/* Main Content Area */}
       {!isAuthenticated ? (
-        /* Isolated Login Gate - ZERO HINTS - STRICT PASSWORD: MOhager191995 */
+        /* Isolated manager login gate */
         <div className="flex-1 flex items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.94 }}
