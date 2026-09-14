@@ -57,7 +57,7 @@ import {
   syncBroadcastNotificationToFirestore,
 } from '../services/firestoreSync';
 import { getStoredAllCustomers, getStoredOrders, getStoredPrescriptions } from '../services/storage';
-import { verifyAdminPin } from '../services/adminSecurity';
+import { getManagerSession, requestManagerMagicLink, signOutManager, MANAGER_EMAIL } from '../services/adminAuth';
 
 export interface GitHubAppItem {
   id: string;
@@ -290,6 +290,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [pin, setPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
+
+  useEffect(() => {
+    getManagerSession().then((allowed) => setIsAuthenticated(allowed));
+  }, []);
 
   // Active Hub Navigation Tab
   const [activeTab, setActiveTab] = useState<'github' | 'products' | 'broadcast' | 'customers' | 'drive'>('github');
@@ -363,24 +368,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     }
   };
 
-  // Verify the manager PIN without storing the plaintext value in the component.
+  // Request a one-time manager login link; no password is stored in the frontend.
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (await verifyAdminPin(pin)) {
-      setIsAuthenticated(true);
-      sessionStorage.setItem('eldeeb_hub_auth', 'true');
+    const result = await requestManagerMagicLink();
+    if (result.success) {
       setAuthError('');
-      setPin('');
-    } else {
-      // Strictly no hints given!
-      setAuthError('رمز الدخول غير صحيح.');
-    }
+      setAuthNotice(`تم إرسال رابط دخول آمن إلى ${MANAGER_EMAIL}`);
+    } else setAuthError(result.error || 'تعذر إرسال رابط الدخول.');
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('eldeeb_hub_auth');
+    signOutManager();
   };
 
   // Open Real-Time Live Editor for an app
@@ -749,6 +749,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
             )}
 
+            {authNotice && (
+              <div className="p-3 bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 text-xs rounded-xl">
+                {authNotice}
+              </div>
+            )}
+
             {/* Form with AUTOCOMPLETE STRICTLY DISABLED TO PREVENT BROWSER SUGGESTIONS */}
             <form
               onSubmit={handleLogin}
@@ -758,22 +764,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             >
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  رمز الدخول السري
+                    تسجيل دخول المدير الآمن
                 </label>
                 <div className="relative">
                   <input
                     id="admin-portal-secure-pin"
-                    type={showPassword ? 'text' : 'password'}
-                    name="admin_secret_key_field"
-                    autoComplete="new-password"
+                    type="email"
+                    name="manager_email"
+                    autoComplete="email"
                     data-lpignore="true"
                     data-form-type="other"
                     spellCheck={false}
                     autoCorrect="off"
                     autoCapitalize="none"
-                    value={pin}
+                    value={MANAGER_EMAIL}
+                    readOnly
                     onChange={(e) => setPin(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder={MANAGER_EMAIL}
                     className="w-full pr-4 pl-11 py-3 bg-slate-800 text-white rounded-2xl text-center text-lg tracking-widest font-mono outline-none border border-slate-700 focus:border-cyan-500 transition-colors shadow-inner"
                     autoFocus
                   />
@@ -792,7 +799,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 type="submit"
                 className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-cyan-500/20 transition-all active:scale-98"
               >
-                تأكيد الدخول للمنظومة
+                إرسال رابط الدخول الآمن
               </button>
             </form>
           </motion.div>

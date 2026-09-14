@@ -47,7 +47,6 @@ import { CATEGORIES } from '../data/initialData';
 import { CustomersManager } from './CustomersManager';
 import {
   addBroadcastNotification,
-  getAdminPin,
   getStoredAllCustomers,
   getStoredOrders,
   getStoredPrescriptions,
@@ -72,7 +71,7 @@ import {
 } from '../services/firestoreSync';
 import { optimizeProductImage, estimateProductsStorageSize } from '../utils/imageOptimizer';
 import { GeminiProductStudio } from './GeminiProductStudio';
-import { verifyAdminPin } from '../services/adminSecurity';
+import { getManagerSession, requestManagerMagicLink } from '../services/adminAuth';
 import { clearSharedLogo, saveSharedLogo } from '../services/siteSettings';
 
 interface AdminModalProps {
@@ -193,11 +192,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPin = getAdminPin();
-    if (await verifyAdminPin(pin, correctPin)) {
+    if (await getManagerSession()) {
       setIsAuthenticated(true);
     } else {
-      alert('كلمة المرور غير صحيحة');
+      const result = await requestManagerMagicLink();
+      alert(result.success ? 'تم إرسال رابط دخول المدير إلى البريد المسجل.' : 'يجب تسجيل دخول المدير أولاً عبر الرابط الآمن.');
     }
   };
 
