@@ -60,6 +60,7 @@ import { ProductImageZoomModal } from './components/ProductImageZoomModal';
 import { GoogleDriveModal } from './components/GoogleDriveModal';
 import { MascotPet } from './components/MascotPet';
 import { Logo } from './components/Logo';
+import { MobileBottomBar } from './components/MobileBottomBar';
 
 export default function App() {
   // State
@@ -406,7 +407,7 @@ export default function App() {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-28 sm:pb-6 space-y-6">
         {/* Hero Banner with Official Identity & Direct WhatsApp Links */}
         <section
           id="hero-banner"
@@ -779,6 +780,7 @@ export default function App() {
             onRemoveItem={handleRemoveCartItem}
             onClearCart={handleClearCart}
             activeCustomer={activeCustomer}
+            onCustomerUpdated={(c) => setActiveCustomer(c)}
             onOpenLoyalty={() => {
               setIsCartOpen(false);
               setIsLoyaltyOpen(true);
@@ -841,6 +843,20 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Persistent Mobile Bottom Navigation with Floating Cart Pill */}
+      <MobileBottomBar
+        cartCount={totalCartCount}
+        cartTotal={cartItems.reduce((sum, i) => sum + i.product.price * i.quantity, 0)}
+        onOpenCart={() => setIsCartOpen(true)}
+        onOpenPrescription={() => setIsPrescriptionOpen(true)}
+        onOpenLoyalty={() => setIsLoyaltyOpen(true)}
+        activeCustomer={activeCustomer}
+        onGoHome={() => {
+          setSelectedCategory('all');
+          setSearchQuery('');
+        }}
+      />
     </div>
   );
 }

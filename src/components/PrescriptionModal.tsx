@@ -31,6 +31,9 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
   const [isCapturingLive, setIsCapturingLive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
+  const [errors, setErrors] = useState<{ name?: string; phone?: string; content?: string }>({});
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -89,6 +92,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
         setImagePreview(dataUrl);
+        setErrors((prev) => ({ ...prev, content: undefined }));
       }
     } catch (err) {
       console.error('Failed to capture snapshot', err);
@@ -103,6 +107,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
+        setErrors((prev) => ({ ...prev, content: undefined }));
       };
       reader.readAsDataURL(file);
     }
@@ -115,6 +120,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
+        setErrors((prev) => ({ ...prev, content: undefined }));
       };
       reader.readAsDataURL(file);
     }
@@ -122,8 +128,32 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!patientName.trim() || !patientPhone.trim()) {
-      alert('يرجى كتابة الاسم ورقم الهاتف للتواصل');
+    const newErrors: { name?: string; phone?: string; content?: string } = {};
+
+    if (!patientName.trim()) {
+      newErrors.name = 'يرجى كتابة اسم المريض بالكامل';
+    }
+
+    const cleanPhone = patientPhone.replace(/\s+/g, '');
+    if (!cleanPhone) {
+      newErrors.phone = 'يرجى كتابة رقم الهاتف للتواصل';
+    } else if (cleanPhone.length < 10) {
+      newErrors.phone = 'يرجى كتابة رقم هاتف صحيح (11 رقم)';
+    }
+
+    if (!imagePreview && !notes.trim()) {
+      newErrors.content = 'يرجى إرفاق صورة الروشتة أو كتابة أسماء الأدوية المطلوبة في الملاحظات';
+    }
+
+    setErrors(newErrors);
+    setHasAttemptedSubmit(true);
+
+    if (Object.keys(newErrors).length > 0) {
+      if (newErrors.name) {
+        document.getElementById('rx-patient-name')?.focus();
+      } else if (newErrors.phone) {
+        document.getElementById('rx-patient-phone')?.focus();
+      }
       return;
     }
 
@@ -243,6 +273,17 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Top Alert Banner if validation failed */}
+              {hasAttemptedSubmit && Object.keys(errors).length > 0 && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border-2 border-rose-500/80 rounded-2xl flex items-start gap-2.5 text-rose-800 dark:text-rose-200 animate-in fade-in duration-200">
+                  <span className="text-base leading-none mt-0.5">⚠️</span>
+                  <div className="text-xs">
+                    <strong className="block font-bold mb-0.5">تنبيه: بيانات ناقصة لإرسال الروشتة</strong>
+                    يرجى ملء الحقول المحددة باللون الأحمر أدناه حتى يتمكن الصيدلي من تجهيز الدواء والتواصل معك.
+                  </div>
+                </div>
+              )}
+
               {/* Prescription Image Upload Area */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
@@ -384,8 +425,9 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
               {/* Name & Phone */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    اسم المريض / العميل <span className="text-rose-500">*</span>
+                  <label className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    <span>اسم المريض / العميل</span>
+                    <span className="text-[11px] text-rose-500 font-bold">* مطلوب</span>
                   </label>
                   <div className="relative">
                     <User className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
@@ -394,16 +436,34 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                       type="text"
                       required
                       value={patientName}
-                      onChange={(e) => setPatientName(e.target.value)}
+                      onChange={(e) => {
+                        setPatientName(e.target.value);
+                        if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
+                      }}
                       placeholder="مثال: محمد السيد"
-                      className="w-full pr-9 pl-3 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs sm:text-sm font-medium border border-transparent focus:border-sky-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition-colors"
+                      className={`w-full pr-9 pl-3 py-2.5 rounded-xl text-xs sm:text-sm font-medium outline-none transition-colors ${
+                        errors.name
+                          ? 'border-2 border-rose-500 bg-rose-50/80 dark:bg-rose-950/50 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/20'
+                          : 'bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-sky-500 focus:bg-white dark:focus:bg-slate-900'
+                      }`}
                     />
+                    {errors.name && (
+                      <span className="absolute left-3 top-2.5 text-rose-500 font-bold text-xs">
+                        ⚠️
+                      </span>
+                    )}
                   </div>
+                  {errors.name && (
+                    <p className="text-[11px] text-rose-600 dark:text-rose-400 font-bold mt-1">
+                      {errors.name}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    رقم الهاتف للتواصل <span className="text-rose-500">*</span>
+                  <label className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    <span>رقم الهاتف للتواصل</span>
+                    <span className="text-[11px] text-rose-500 font-bold">* مطلوب</span>
                   </label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
@@ -412,13 +472,36 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                       type="tel"
                       required
                       value={patientPhone}
-                      onChange={(e) => setPatientPhone(e.target.value)}
+                      onChange={(e) => {
+                        setPatientPhone(e.target.value);
+                        if (errors.phone) setErrors((prev) => ({ ...prev, phone: undefined }));
+                      }}
                       placeholder="010XXXXXXXX"
-                      className="w-full pr-9 pl-3 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs sm:text-sm font-medium border border-transparent focus:border-sky-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition-colors"
+                      className={`w-full pr-9 pl-3 py-2.5 rounded-xl text-xs sm:text-sm font-medium outline-none transition-colors ${
+                        errors.phone
+                          ? 'border-2 border-rose-500 bg-rose-50/80 dark:bg-rose-950/50 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/20'
+                          : 'bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-sky-500 focus:bg-white dark:focus:bg-slate-900'
+                      }`}
                     />
+                    {errors.phone && (
+                      <span className="absolute left-3 top-2.5 text-rose-500 font-bold text-xs">
+                        ⚠️
+                      </span>
+                    )}
                   </div>
+                  {errors.phone && (
+                    <p className="text-[11px] text-rose-600 dark:text-rose-400 font-bold mt-1">
+                      {errors.phone}
+                    </p>
+                  )}
                 </div>
               </div>
+
+              {errors.content && (
+                <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-900 rounded-xl text-xs text-rose-700 dark:text-rose-300 font-bold">
+                  ⚠️ {errors.content}
+                </div>
+              )}
 
               {/* Address */}
               <div>

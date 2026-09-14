@@ -8,24 +8,73 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   visa: '💳 فيزا / بطاقة بنكية (Visa / Card)',
 };
 
+export interface WhatsAppOrderDetails {
+  items: CartItem[];
+  customer: Partial<Customer>;
+  pointsDiscount: number;
+  earnedPoints: number;
+  pointsUsed?: number;
+  remainingPoints?: number;
+  previousPoints?: number;
+  paymentMethod?: PaymentMethod;
+  notes?: string;
+}
+
 /**
  * Creates WhatsApp URL for sending an order directly to the pharmacy
  */
 export function createOrderWhatsAppUrl(
-  items: CartItem[],
-  customer: Partial<Customer>,
-  pointsDiscount: number,
-  earnedPoints: number,
+  itemsOrDetails: CartItem[] | WhatsAppOrderDetails,
+  customerOrDiscount?: Partial<Customer> | number,
+  pointsDiscountOrEarned?: number,
+  earnedPoints?: number,
   paymentMethod: PaymentMethod = 'cash',
-  notes?: string
+  notes?: string,
+  extraPointsInfo?: { pointsUsed?: number; remainingPoints?: number; previousPoints?: number }
 ): string {
+  let items: CartItem[];
+  let customer: Partial<Customer>;
+  let pointsDiscount = 0;
+  let pointsEarned = 0;
+  let method: PaymentMethod = 'cash';
+  let orderNotes = '';
+  let pointsUsed = 0;
+  let remainingPoints: number | undefined;
+  let previousPoints: number | undefined;
+
+  // Support both object signature and positional signature
+  if (Array.isArray(itemsOrDetails)) {
+    items = itemsOrDetails;
+    customer = (customerOrDiscount as Partial<Customer>) || {};
+    pointsDiscount = pointsDiscountOrEarned || 0;
+    pointsEarned = earnedPoints || 0;
+    method = paymentMethod;
+    orderNotes = notes || '';
+    if (extraPointsInfo) {
+      pointsUsed = extraPointsInfo.pointsUsed || 0;
+      remainingPoints = extraPointsInfo.remainingPoints;
+      previousPoints = extraPointsInfo.previousPoints;
+    }
+  } else {
+    const d = itemsOrDetails;
+    items = d.items;
+    customer = d.customer;
+    pointsDiscount = d.pointsDiscount || 0;
+    pointsEarned = d.earnedPoints || 0;
+    pointsUsed = d.pointsUsed || 0;
+    remainingPoints = d.remainingPoints;
+    previousPoints = d.previousPoints;
+    method = d.paymentMethod || 'cash';
+    orderNotes = d.notes || '';
+  }
+
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const total = Math.max(0, subtotal - pointsDiscount);
 
   let message = `🏥 *طلب أدوية ومستلزمات جديدة - صيدلية الديب*\n`;
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `👤 *بيانات العميل:*\n`;
-  message += `• الاسم: ${customer.name || 'عميل كرام'}\n`;
+  message += `👤 *بيانات العميل والتوصيل:*\n`;
+  message += `• الاسم: ${customer.name || 'عميل كريم'}\n`;
   message += `• رقم الهاتف: ${customer.phone || 'غير مسجل'}\n`;
   if (customer.address) {
     message += `• عنوان التوصيل: ${customer.address}\n`;
@@ -40,24 +89,43 @@ export function createOrderWhatsAppUrl(
 
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   message += `💳 *طريقة الدفع المختارة:*\n`;
-  message += `• ${PAYMENT_METHOD_LABELS[paymentMethod] || paymentMethod}\n`;
+  message += `• ${PAYMENT_METHOD_LABELS[method] || method}\n`;
+
+  // Loyalty points section
+  message += `━━━━━━━━━━━━━━━━━━━━━\n`;
+  if (pointsDiscount > 0 || pointsUsed > 0) {
+    message += `🌟 *نظام نقاط الولاء والمكافآت (تم تطبيق الخصم):*\n`;
+    if (previousPoints !== undefined) {
+      message += `• رصيد النقاط قبل الطلب: ${previousPoints} نقطة\n`;
+    }
+    message += `• النقاط المخصومة من الحساب: -${pointsUsed || pointsDiscount} نقطة\n`;
+    message += `• قيمة الخصم المباشر: -${pointsDiscount} جنيه مصري\n`;
+    if (remainingPoints !== undefined) {
+      message += `• رصيد النقاط المتبقي بحسابك: ${remainingPoints} نقطة\n`;
+    }
+    message += `• نقاط إضافية مكتسبة من الطلب: +${pointsEarned} نقطة\n`;
+  } else {
+    message += `🎁 *نقاط الولاء المكتسبة من هذا الطلب: +${pointsEarned} نقطة*\n`;
+    if (previousPoints !== undefined) {
+      message += `• رصيد نقاطك الحالي المحفوظ: ${previousPoints} نقطة\n`;
+    }
+  }
 
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `💰 *الحساب الإجمالي:*\n`;
-  message += `• المجموع: ${subtotal} جنيه\n`;
+  message += `💰 *الحساب الإجمالي للفاتورة:*\n`;
+  message += `• إجمالي المنتجات: ${subtotal} جنيه\n`;
   if (pointsDiscount > 0) {
     message += `• خصم نقاط الولاء: -${pointsDiscount} جنيه\n`;
   }
-  message += `• *المبلغ المطلوب سداده: ${total} جنيه*\n`;
-  message += `🎁 *نقاط الولاء المكتسبة من الطلب: +${earnedPoints} نقطة*\n`;
+  message += `• *المبلغ النهائي المطلوب للدفع: ${total} جنيه*\n`;
 
-  if (notes && notes.trim()) {
+  if (orderNotes && orderNotes.trim()) {
     message += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    message += `📝 *ملاحظات العميل:*\n${notes.trim()}\n`;
+    message += `📝 *ملاحظات العميل للصيدلي:*\n${orderNotes.trim()}\n`;
   }
 
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `📍 شكراً لتسوقكم من صيدلية الديب. في انتظار تأكيد الطلب وسرعة التوصيل.`;
+  message += `📍 شكراً لتسوقكم من صيدلية الديب. في انتظار تأكيد وتجهيز الطلب للتوصيل الفوري.`;
 
   return `https://wa.me/${PHARMACY_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 }

@@ -200,12 +200,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </button>
 
-            {/* Google Drive Cloud Sync (Admin Privilege Only) */}
+            {/* Google Drive Cloud Sync (Admin Privilege Only - Desktop/Tablet) */}
             {onOpenGoogleDrive && (
               <button
                 id="google-drive-nav-btn"
                 onClick={handleBackupClick}
-                className="p-2 sm:p-2.5 rounded-2xl text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-slate-800 transition-colors relative"
+                className="hidden sm:flex p-2 sm:p-2.5 rounded-2xl text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-slate-800 transition-colors relative"
                 title="النسخ الاحتياطي السحابي والمزامنة (صلاحيات المدير)"
               >
                 <HardDrive className="w-5 h-5 text-sky-600 dark:text-sky-400" />
@@ -223,9 +223,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               title={isDarkMode ? 'الوضع النهاري' : 'الوضع الليلي'}
             >
               {isDarkMode ? (
-                <Sun className="w-5 h-5 text-amber-400" />
+                <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
               ) : (
-                <Moon className="w-5 h-5 text-slate-700" />
+                <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-slate-700" />
               )}
             </button>
 
@@ -233,7 +233,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               id="cart-nav-btn"
               onClick={onOpenCart}
-              className={`p-2 sm:px-4 sm:py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white rounded-2xl font-bold text-xs shadow-md shadow-sky-500/20 flex items-center gap-2 transition-all active:scale-95 relative ${
+              className={`px-2.5 py-2 sm:px-4 sm:py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white rounded-2xl font-bold text-xs shadow-md shadow-sky-500/25 flex items-center gap-1.5 sm:gap-2 transition-all active:scale-95 relative shrink-0 ${
                 isCartBouncing ? 'scale-110 ring-4 ring-rose-400/50 shadow-xl shadow-rose-500/30' : ''
               }`}
               title="سلة التسوق"
@@ -249,7 +249,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
 
-              <span className="hidden sm:inline font-bold">السلة</span>
+              <span className="font-bold text-xs inline-block">السلة</span>
 
               {/* Exact Count Quantity Badge */}
               {cartCount > 0 ? (
