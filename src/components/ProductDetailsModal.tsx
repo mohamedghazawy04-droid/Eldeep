@@ -22,7 +22,7 @@ import { DosageCalculator } from './DosageCalculator';
 interface ProductDetailsModalProps {
   product: Product | null;
   onClose: () => void;
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, event?: React.MouseEvent) => void;
   onZoomImage?: (product: Product) => void;
 }
 
@@ -230,8 +230,8 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
           <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <button
               id="add-to-cart-from-modal-btn"
-              onClick={() => {
-                onAddToCart(product);
+              onClick={(e) => {
+                onAddToCart(product, e);
                 onClose();
               }}
               disabled={!product.inStock || product.isComingSoon}

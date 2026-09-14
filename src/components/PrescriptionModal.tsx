@@ -28,9 +28,74 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
+  const [isCapturingLive, setIsCapturingLive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   if (!isOpen) return null;
+
+  const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsCapturingLive(false);
+  };
+
+  const handleStartLiveCamera = async () => {
+    setCameraError(null);
+    try {
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        // Fallback to file input with capture attribute
+        cameraInputRef.current?.click();
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setIsCapturingLive(true);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 100);
+    } catch (err: any) {
+      console.warn('Camera stream error or permission denied:', err);
+      // If live stream permission is denied or unsupported, fallback to native camera file input
+      if (cameraInputRef.current) {
+        cameraInputRef.current.click();
+      } else {
+        setCameraError('لم يتم منح إذن الكاميرا. يمكنك اختيار صورة الروشتة من جهازك أو الألبوم.');
+      }
+    }
+  };
+
+  const handleCaptureSnapshot = () => {
+    if (!videoRef.current) return;
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        setImagePreview(dataUrl);
+      }
+    } catch (err) {
+      console.error('Failed to capture snapshot', err);
+    } finally {
+      stopCameraStream();
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -143,7 +208,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-lg">إرسال روشتة طبية للصيدلية</h3>
-              <p className="text-xs text-sky-100">تصل فوراً لصيدلي صيدليات الديب على الواتساب</p>
+              <p className="text-xs text-sky-100">تصل فوراً لصيدلي صيدلية الديب على الواتساب</p>
             </div>
           </div>
           <button
@@ -180,50 +245,140 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Prescription Image Upload Area */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  صورة الروشتة أو علبة الدواء
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span>صورة الروشتة أو علبة الدواء</span>
+                  <span className="text-[10px] text-slate-400 font-normal">اختياري أو تصوير مباشر</span>
                 </label>
-                <div
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-colors ${
-                    imagePreview
-                      ? 'border-sky-500 bg-sky-50/50 dark:bg-sky-950/20'
-                      : 'border-slate-300 dark:border-slate-700 hover:border-sky-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                  }`}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  {imagePreview ? (
-                    <div className="relative group max-h-48 flex items-center justify-center overflow-hidden rounded-xl">
+
+                {cameraError && (
+                  <div className="mb-2 p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-xs text-rose-700 dark:text-rose-300">
+                    {cameraError}
+                  </div>
+                )}
+
+                {/* Live Camera View (Only active when user clicks camera) */}
+                {isCapturingLive ? (
+                  <div className="relative rounded-2xl overflow-hidden bg-black border-2 border-sky-500 flex flex-col items-center">
+                    <video
+                      ref={videoRef}
+                      playsInline
+                      muted
+                      autoPlay
+                      className="w-full max-h-64 object-cover"
+                    />
+                    <div className="w-full p-3 bg-slate-900/90 flex items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleCaptureSnapshot}
+                        className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg active:scale-95 transition-all"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>التقاط الصورة الآن</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopCameraStream}
+                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold active:scale-95 transition-all"
+                      >
+                        إلغاء
+                      </button>
+                    </div>
+                  </div>
+                ) : imagePreview ? (
+                  /* Image Preview with change buttons */
+                  <div className="p-3 border-2 border-sky-500/50 bg-sky-50/50 dark:bg-sky-950/20 rounded-2xl flex flex-col items-center gap-3">
+                    <div className="relative max-h-52 w-full flex items-center justify-center overflow-hidden rounded-xl bg-black/5">
                       <img
                         src={imagePreview}
                         alt="Prescription Preview"
-                        className="max-h-44 object-contain rounded-lg shadow"
+                        className="max-h-48 object-contain rounded-lg shadow-sm"
                       />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-bold">
-                        <span>انقر لتغيير الصورة</span>
-                      </div>
                     </div>
-                  ) : (
-                    <div className="py-4 flex flex-col items-center gap-2 text-slate-500 dark:text-slate-400">
+                    <div className="flex flex-wrap items-center justify-center gap-2 w-full">
+                      <button
+                        type="button"
+                        onClick={handleStartLiveCamera}
+                        className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all shadow-sm"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>إعادة التصوير بالكاميرا</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>اختيار صورة أخرى</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setImagePreview(null)}
+                        className="px-3 py-1.5 bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-200 rounded-xl text-xs font-bold active:scale-95 transition-all"
+                      >
+                        حذف
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Option Selection: No camera access until button clicked */
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleDrop}
+                    className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-5 text-center transition-colors bg-slate-50/50 dark:bg-slate-800/30"
+                  >
+                    <div className="flex flex-col items-center gap-3">
                       <div className="w-12 h-12 rounded-2xl bg-sky-100 dark:bg-slate-800 text-sky-600 dark:text-sky-400 flex items-center justify-center">
-                        <Upload className="w-6 h-6" />
+                        <FileText className="w-6 h-6" />
                       </div>
-                      <p className="text-xs font-semibold">
-                        اسحب وأفلت صورة الروشتة هنا، أو <span className="text-sky-600 dark:text-sky-400 underline">اضغط للتصوير أو الاختيار</span>
-                      </p>
-                      <span className="text-[11px] text-slate-400">يدعم الصور من الكاميرا أو المعرض (JPG, PNG)</span>
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                          التقط صورة للروشتة أو اخترها من جهازك
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          (لن يتم فتح الكاميرا إلا عند طلبك ذلك عبر الزر أدناه)
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleStartLiveCamera}
+                          className="px-4 py-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md active:scale-95 transition-all"
+                        >
+                          <Camera className="w-4 h-4" />
+                          <span>فتح الكاميرا للتصوير</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-xl text-xs font-bold flex items-center gap-2 active:scale-95 transition-all"
+                        >
+                          <Upload className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                          <span>رفع من جهازك</span>
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+
+                {/* Hidden file inputs for manual upload & camera capture */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
               </div>
 
               {/* Name & Phone */}
@@ -240,7 +395,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                       required
                       value={patientName}
                       onChange={(e) => setPatientName(e.target.value)}
-                      placeholder="مثال: أحمد محمود"
+                      placeholder="مثال: محمد السيد"
                       className="w-full pr-9 pl-3 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs sm:text-sm font-medium border border-transparent focus:border-sky-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition-colors"
                     />
                   </div>

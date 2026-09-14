@@ -1,45 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Heart, X, MessageSquareHeart, Award } from 'lucide-react';
+import { Sparkles, Heart, X, MessageSquareHeart, Award, RefreshCw, Calendar } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { getDeboDailyTip, getRandomDeboTip, DailyHealthTip } from '../data/deboTips';
 
 interface MascotPetProps {
   onRewardPoints?: (points: number) => void;
   activeCategoryName?: string;
 }
 
-const HEALTH_TIPS = [
-  '🩺 اشرب مياه كتير على مدار اليوم.. صحتك غالية علينا في صيدلية الديب!',
-  '💊 متنساش تاخد الدواء في مواعيده المحددة بالظبط!',
-  '✨ لو محتاج أي استشارة صيدلانية، دوس على زرار الواتساب وهنرد عليك فوراً!',
-  '🍎 تفاحة في اليوم والمشي نص ساعة بيحموا قلبك وعضلاتك!',
-  '🛡️ متشاركش قطرات العين أو بخاخات الأنف مع حد تاني!',
-  '👶 قسم الأطفال عندنا فيه كل مستلزمات العناية بالبيبي بأعلى جودة!',
-  '🎁 كل ما تطلب أكتر، بتجمع نقاط ولاء أكتر وتوفر فلوس!',
-];
-
 export const MascotPet: React.FC<MascotPetProps> = ({
   onRewardPoints,
   activeCategoryName,
 }) => {
   const [mood, setMood] = useState<'idle' | 'jumping' | 'dancing' | 'winking' | 'celebrating'>('idle');
-  const [speech, setSpeech] = useState<string>('أهلاً بيك في صيدلية الديب! أنا ديبو المساعد الصيدلي 🐾');
+  const [currentTip, setCurrentTip] = useState<DailyHealthTip>(() => getDeboDailyTip(activeCategoryName));
+  const [isDailySpecial, setIsDailySpecial] = useState<boolean>(true);
+  const [speech, setSpeech] = useState<string>('');
   const [showSpeech, setShowSpeech] = useState<boolean>(true);
   const [clickCount, setClickCount] = useState<number>(0);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
   const [rewardClaimed, setRewardClaimed] = useState<boolean>(false);
 
-  // Periodic greeting or category hint
+  // Initialize with the daily verified tip on mount
+  useEffect(() => {
+    const tip = getDeboDailyTip(activeCategoryName);
+    setCurrentTip(tip);
+    setSpeech(`${tip.icon} ${tip.title}: ${tip.content}`);
+    setIsDailySpecial(true);
+  }, []);
+
+  // Periodic category change hint
   useEffect(() => {
     if (activeCategoryName) {
-      setSpeech(`أنت دلوقتي في قسم: ${activeCategoryName}.. لو محتاج ترشيح لدواء قولي!`);
+      const tip = getDeboDailyTip(activeCategoryName);
+      setCurrentTip(tip);
+      setSpeech(`${tip.icon} ${tip.title}: ${tip.content}`);
+      setIsDailySpecial(false);
       setShowSpeech(true);
-      const timer = setTimeout(() => setShowSpeech(false), 5000);
-      return () => clearTimeout(timer);
     }
   }, [activeCategoryName]);
 
-  // Click on mascot toggles fun animations and tips
+  // Handle requesting another tip
+  const handleNextTip = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const next = getRandomDeboTip(currentTip.id);
+    setCurrentTip(next);
+    setSpeech(`${next.icon} ${next.title}: ${next.content}`);
+    setIsDailySpecial(false);
+    setShowSpeech(true);
+  };
+
+  // Click on mascot toggles fun animations and fresh verified medical tip
   const handleMascotClick = () => {
     const nextClicks = clickCount + 1;
     setClickCount(nextClicks);
@@ -48,9 +60,11 @@ export const MascotPet: React.FC<MascotPetProps> = ({
     const selectedMood = moods[nextClicks % moods.length];
     setMood(selectedMood);
 
-    // Pick random health tip
-    const randomTip = HEALTH_TIPS[Math.floor(Math.random() * HEALTH_TIPS.length)];
-    setSpeech(randomTip);
+    // Provide a fresh medical tip from the verified database
+    const next = getRandomDeboTip(currentTip.id);
+    setCurrentTip(next);
+    setSpeech(`${next.icon} ${next.title}: ${next.content}`);
+    setIsDailySpecial(false);
     setShowSpeech(true);
 
     // Easter egg: bonus loyalty reward every 5 clicks!
@@ -109,19 +123,57 @@ export const MascotPet: React.FC<MascotPetProps> = ({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.9 }}
               transition={{ duration: 0.25 }}
-              className="mb-2 max-w-[220px] sm:max-w-[260px] bg-white/95 dark:bg-slate-800/95 backdrop-blur-md text-slate-800 dark:text-slate-100 text-xs p-3 rounded-2xl shadow-xl border border-sky-200 dark:border-sky-900/50 font-cairo leading-relaxed relative"
+              className="mb-2 max-w-[240px] sm:max-w-[280px] bg-white/95 dark:bg-slate-800/95 backdrop-blur-md text-slate-800 dark:text-slate-100 text-xs p-3 rounded-2xl shadow-xl border border-sky-200 dark:border-sky-900/50 font-cairo leading-relaxed relative"
             >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowSpeech(false);
-                }}
-                className="absolute top-1.5 left-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
-                title="إغلاق التلميح"
-              >
-                <X className="w-3 h-3" />
-              </button>
-              <p className="pr-1 pl-3 font-medium">{speech}</p>
+              <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 dark:border-slate-700/60">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs">{currentTip.icon}</span>
+                  <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400">
+                    {isDailySpecial ? 'نصيحة اليوم المعتمدة' : 'معلومة صيدلانية'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleNextTip}
+                    className="text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                    title="نصيحة أخرى"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSpeech(false);
+                    }}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                    title="إغلاق التلميح"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              <h6 className="font-bold text-[11px] text-slate-900 dark:text-white mb-1">
+                {currentTip.title}
+              </h6>
+              <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                {currentTip.content}
+              </p>
+
+              <div className="mt-2 pt-1.5 flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-400 border-t border-slate-100 dark:border-slate-700/40">
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-2.5 h-2.5 text-sky-500" />
+                  <span>تحديث يومي مستمر</span>
+                </span>
+                <button
+                  onClick={handleNextTip}
+                  className="font-bold text-sky-600 dark:text-sky-400 hover:underline"
+                >
+                  معلومة ثانية &larr;
+                </button>
+              </div>
+
               {/* Little triangle pointing to mascot */}
               <div className="absolute -bottom-2 left-8 w-3 h-3 bg-white dark:bg-slate-800 rotate-45 border-r border-b border-sky-200 dark:border-sky-900/50" />
             </motion.div>

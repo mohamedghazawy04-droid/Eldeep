@@ -13,14 +13,14 @@ export const Logo: React.FC<LogoProps> = ({
   showSubtitle = true,
 }) => {
   const [logoSrc, setLogoSrc] = useState<string>(() => {
-    return getStoredLogo() || '/eldeeb_logo.jpg';
+    return getStoredLogo() || '/eldeeb_pharmacy_logo.jpg?v=2';
   });
   const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     const handleLogoUpdated = () => {
       const stored = getStoredLogo();
-      setLogoSrc(stored || '/eldeeb_logo.jpg');
+      setLogoSrc(stored || '/eldeeb_pharmacy_logo.jpg?v=2');
       setImageError(false);
     };
 
@@ -84,7 +84,7 @@ export const Logo: React.FC<LogoProps> = ({
       <div className="flex flex-col text-right">
         <div className="flex items-center gap-1.5">
           <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-l from-blue-700 via-sky-600 to-cyan-500 dark:from-sky-400 dark:to-cyan-200 tracking-tight text-xl sm:text-2xl font-cairo">
-            صيدليات الديب
+            صيدلية الديب
           </span>
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="متاح 24/7" />
         </div>

@@ -49,6 +49,7 @@ import { ProductCard } from './components/ProductCard';
 import { ProductDetailsModal } from './components/ProductDetailsModal';
 import { CartDrawer } from './components/CartDrawer';
 import { CartDropAnimation, CartDropPayload } from './components/CartDropAnimation';
+import { FlyToCartAnimation, FlyingProductItem } from './components/FlyToCartAnimation';
 import { PrescriptionModal } from './components/PrescriptionModal';
 import { LoyaltyModal } from './components/LoyaltyModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
@@ -148,8 +149,9 @@ export default function App() {
   // Mobile Pinch/Tap Zoom Modal for product images
   const [zoomedProduct, setZoomedProduct] = useState<Product | null>(null);
 
-  // Micro-interaction: Animated Cart Drop payload
+  // Micro-interaction: Animated Cart Drop payload & Flying Item trajectory
   const [cartDropPayload, setCartDropPayload] = useState<CartDropPayload | null>(null);
+  const [flyingItems, setFlyingItems] = useState<FlyingProductItem[]>([]);
 
   // Sync theme
   useEffect(() => {
@@ -190,7 +192,7 @@ export default function App() {
     setIsDarkMode((prev) => !prev);
   };
 
-  // Add to cart with smooth animated drop
+  // Add to cart with smooth parabolic motion towards top header cart
   const handleAddToCart = (product: Product, event?: React.MouseEvent) => {
     setCartItems((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
@@ -202,7 +204,39 @@ export default function App() {
       return [...prev, { product, quantity: 1 }];
     });
 
-    // Trigger peaceful cart-drop micro-interaction
+    // Calculate source and target coordinates for the fly-to-cart animation
+    const cartBtn = document.getElementById('cart-nav-btn');
+    const cartRect = cartBtn?.getBoundingClientRect();
+    const targetX = cartRect ? cartRect.left + cartRect.width / 2 : window.innerWidth - 60;
+    const targetY = cartRect ? cartRect.top + cartRect.height / 2 : 40;
+
+    let startX = window.innerWidth / 2;
+    let startY = window.innerHeight / 2;
+
+    if (event) {
+      const el = (event.currentTarget as HTMLElement) || (event.target as HTMLElement);
+      const rect = el?.getBoundingClientRect?.();
+      if (rect) {
+        startX = rect.left + rect.width / 2;
+        startY = rect.top + rect.height / 2;
+      }
+    }
+
+    const flyId = `${product.id}-${Date.now()}-${Math.random()}`;
+    setFlyingItems((prev) => [
+      ...prev,
+      {
+        id: flyId,
+        image: product.image,
+        nameAr: product.nameAr,
+        startX,
+        startY,
+        targetX,
+        targetY,
+      },
+    ]);
+
+    // Also trigger gentle cart confirmation banner
     setCartDropPayload({ product, quantity: 1 });
   };
 
@@ -551,6 +585,12 @@ export default function App() {
         activeCategoryName={activeCategoryName}
       />
 
+      {/* Fly-to-Cart Parabolic Motion (Product moves and flies directly into header cart) */}
+      <FlyToCartAnimation
+        flyingItems={flyingItems}
+        onComplete={(id) => setFlyingItems((prev) => prev.filter((i) => i.id !== id))}
+      />
+
       {/* Cart Drop Micro-Interaction (Item drops into cart with animation) */}
       <CartDropAnimation
         payload={cartDropPayload}
@@ -565,7 +605,7 @@ export default function App() {
             <div className="space-y-3">
               <Logo size="md" />
               <p className="text-xs leading-relaxed text-slate-500">
-                صيدليات الديب - نسعى دائماً لتقديم أفضل خدمة دوائية واستشارات طبية معتمدة على مدار 24 ساعة بأحدث التقنيات الرقمية.
+                صيدلية الديب - نسعى دائماً لتقديم أفضل خدمة دوائية واستشارات طبية معتمدة على مدار 24 ساعة بأحدث التقنيات الرقمية.
               </p>
               <div className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
                 خدمة التوصيل: +201009097378
@@ -650,7 +690,7 @@ export default function App() {
 
           <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
             <div>
-              جميع الحقوق محفوظة © {new Date().getFullYear()} صيدليات الديب - El Deeb Pharmacy
+              جميع الحقوق محفوظة © {new Date().getFullYear()} صيدلية الديب - El Deeb Pharmacy
             </div>
             <div className="flex items-center gap-2.5">
               <span className="text-slate-400 font-mono font-medium">WhatsApp: 01009097378</span>

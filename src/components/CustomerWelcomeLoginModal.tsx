@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Phone, User, MapPin, ArrowLeft, CheckCircle2, ShieldCheck, X } from 'lucide-react';
 import { Customer } from '../types';
 import { DeliveryCaptainAnimation } from './DeliveryCaptainAnimation';
-import { calculateTier, saveCustomer } from '../services/storage';
-import { syncSaveCustomerToFirestore } from '../services/firestoreSync';
+import { calculateTier, saveCustomer, getStoredAllCustomers } from '../services/storage';
+import { syncSaveCustomerToFirestore, fetchCustomerFromFirestore } from '../services/firestoreSync';
 
 interface CustomerWelcomeLoginModalProps {
   isOpen: boolean;
@@ -22,10 +22,38 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
   const [address, setAddress] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [detectedAccountMsg, setDetectedAccountMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Auto-detect existing account when typing phone number to reassure customer
+  const handlePhoneChange = async (val: string) => {
+    setPhone(val);
+    const clean = val.replace(/[^\d+]/g, '');
+    if (clean.length >= 10) {
+      const allLocal = getStoredAllCustomers();
+      const existing = allLocal.find((c) => c.phone.replace(/[^\d+]/g, '') === clean);
+      if (existing) {
+        if (!name) setName(existing.name);
+        if (!address && existing.address) setAddress(existing.address);
+        setDetectedAccountMsg(`مرحباً بعودتك! تم العثور على رصيدك المحفوظ (${existing.points} نقطة ولاء)`);
+        return;
+      }
+      // Check cloud Firestore
+      const cloudCust = await fetchCustomerFromFirestore(clean);
+      if (cloudCust) {
+        if (!name) setName(cloudCust.name);
+        if (!address && cloudCust.address) setAddress(cloudCust.address);
+        setDetectedAccountMsg(`مرحباً بعودتك! تم العثور على حسابك بالسيرفر السحابي (${cloudCust.points} نقطة ولاء)`);
+      } else {
+        setDetectedAccountMsg(null);
+      }
+    } else {
+      setDetectedAccountMsg(null);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim()) {
       alert('يرجى كتابة الاسم ورقم الهاتف للبدء');
@@ -34,25 +62,31 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
 
     setIsSubmitting(true);
 
-    // Initial 10 welcome points for new customer (= 10 EGP discount!)
-    const welcomePoints = 10;
-    const newCustomer: Customer = {
-      id: 'cust-' + Date.now(),
-      name: name.trim(),
+    const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
+    const allLocal = getStoredAllCustomers();
+    const existingLocal = allLocal.find((c) => c.phone.replace(/[^\d+]/g, '') === cleanPhone);
+    const existingCloud = await fetchCustomerFromFirestore(cleanPhone);
+    const matched = existingCloud || existingLocal;
+
+    // Preserve points if account existed! Never wipe out hard-earned points!
+    const finalPoints = matched ? matched.points : 10;
+    const finalCustomer: Customer = {
+      id: matched?.id || 'cust-' + Date.now(),
+      name: name.trim() || matched?.name || 'عميل صيدلية الديب',
       phone: phone.trim(),
-      address: address.trim() || 'العنوان يحدد عند الطلب',
-      points: welcomePoints,
-      tier: calculateTier(welcomePoints),
-      totalOrders: 0,
-      joinedDate: new Date().toISOString(),
+      address: address.trim() || matched?.address || 'العنوان يحدد عند الطلب',
+      points: finalPoints,
+      tier: calculateTier(finalPoints),
+      totalOrders: matched?.totalOrders || 0,
+      joinedDate: matched?.joinedDate || new Date().toISOString(),
     };
 
-    saveCustomer(newCustomer);
-    syncSaveCustomerToFirestore(newCustomer);
+    saveCustomer(finalCustomer);
+    syncSaveCustomerToFirestore(finalCustomer);
 
     setTimeout(() => {
       setIsSubmitting(false);
-      onLoginSuccess(newCustomer);
+      onLoginSuccess(finalCustomer);
       onClose();
     }, 400);
   };
@@ -81,7 +115,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
               <h3 className="font-extrabold text-sm sm:text-base">
-                صيدليات الديب - خدمة التوصيل 24/7
+                صيدلية الديب - خدمة التوصيل 24/7
               </h3>
             </div>
             <button
@@ -144,7 +178,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
                     type="tel"
                     required
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => handlePhoneChange(e.target.value)}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
                     placeholder="010XXXXXXXX"
@@ -152,6 +186,12 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
                   />
                   <Phone className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
                 </div>
+                {detectedAccountMsg && (
+                  <div className="mt-1.5 p-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{detectedAccountMsg}</span>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -195,7 +235,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
 
             <div className="flex items-center justify-center gap-1 text-[10px] text-slate-400 pt-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>بياناتك في أمان تام ومعتمدة في سجلات صيدليات الديب</span>
+              <span>بياناتك في أمان تام ومعتمدة في سجلات صيدلية الديب</span>
             </div>
           </div>
         </motion.div>

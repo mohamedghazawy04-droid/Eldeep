@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { X, Award, Sparkles, User, Phone, MapPin, Check, Gift, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Customer, LoyaltyTier } from '../types';
-import { calculateTier, saveCustomer } from '../services/storage';
+import { calculateTier, saveCustomer, getStoredAllCustomers } from '../services/storage';
 import { syncSaveCustomerToFirestore, fetchCustomerFromFirestore } from '../services/firestoreSync';
 import { PharmacyDeliveryAnimation } from './PharmacyDeliveryAnimation';
 import confetti from 'canvas-confetti';
@@ -52,16 +52,23 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
       return;
     }
 
-    const currentPoints = activeCustomer ? activeCustomer.points : 10; // 10 welcome bonus points = 10 EGP!
+    const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
+    const allLocal = getStoredAllCustomers();
+    const existingLocal = allLocal.find((c) => c.phone.replace(/[^\d+]/g, '') === cleanPhone);
+    const existingCloud = await fetchCustomerFromFirestore(cleanPhone);
+    const matched = activeCustomer || existingCloud || existingLocal;
+
+    // Never reset existing points!
+    const currentPoints = matched ? matched.points : 10;
     const newCustomer: Customer = {
-      id: activeCustomer?.id || 'cust-' + Date.now(),
+      id: matched?.id || activeCustomer?.id || 'cust-' + Date.now(),
       name: name.trim(),
       phone: phone.trim(),
-      address: address.trim(),
+      address: address.trim() || matched?.address || '',
       points: currentPoints,
       tier: calculateTier(currentPoints),
-      totalOrders: activeCustomer?.totalOrders || 0,
-      joinedDate: activeCustomer?.joinedDate || new Date().toLocaleDateString('ar-EG'),
+      totalOrders: matched?.totalOrders || activeCustomer?.totalOrders || 0,
+      joinedDate: matched?.joinedDate || activeCustomer?.joinedDate || new Date().toLocaleDateString('ar-EG'),
     };
 
     saveCustomer(newCustomer);
@@ -246,7 +253,7 @@ export const LoyaltyModal: React.FC<LoyaltyModalProps> = ({
               <div className="p-3.5 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900/50 text-xs text-sky-900 dark:text-sky-200 leading-relaxed flex items-start gap-2.5">
                 <Gift className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
                 <span>
-                  <strong>نظام الولاء المباشر والواضح:</strong> كل 100 جنيه مشتريات = 1 نقطة ولاء، والنقطة الواحدة تخصم 1 جنيه مصري حقيقي من فاتورتك بالسلة!
+                  <strong>نظام الولاء المباشر على المنتجات:</strong> كل 100 جنيه تمنحك 1 نقطة ولاء محسوبة بدقة على كل صنف (مثلاً: منتج بسعر 92 ج.م يمنحك 0.92 نقطة)، وتخصم النقطة 1 جنيه مصري حقيقي من فاتورتك بالسلة!
                 </span>
               </div>
             </>

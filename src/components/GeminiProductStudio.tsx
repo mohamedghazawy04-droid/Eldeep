@@ -28,7 +28,7 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
   initialImage = '',
   onImageEnhanced,
   onCancel,
-  productName = 'صيدليات الديب',
+  productName = 'صيدلية الديب',
 }) => {
   const [sourceImage, setSourceImage] = useState<string>(initialImage);
   const [activePreset, setActivePreset] = useState<StudioPreset>('commercial3d');
@@ -436,19 +436,21 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
                         <button
                           type="button"
                           onClick={() => startCamera('environment')}
-                          className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                          className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95"
                         >
                           <Camera className="w-4 h-4" />
                           <span>فتح الكاميرا الآن</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5"
-                        >
+                        <label className="cursor-pointer px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-95">
                           <Upload className="w-4 h-4" />
                           <span>رفع من الجهاز</span>
-                        </button>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleFileUpload}
+                          />
+                        </label>
                       </div>
                     </div>
                   )}
@@ -478,22 +480,16 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
                   <span>إعادة الالتقاط</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5"
-                >
+                <label className="cursor-pointer px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-95">
                   <Upload className="w-3.5 h-3.5 text-sky-600" />
                   <span>تغيير الصورة</span>
-                </button>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </label>
               </div>
             )}
 

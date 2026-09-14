@@ -1,5 +1,5 @@
-import React from 'react';
-import { Search, Moon, Sun, ShoppingCart, Bell, Award, Camera, Lock, PhoneCall, HardDrive } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Moon, Sun, ShoppingCart, Bell, Award, Camera, Lock, PhoneCall, HardDrive, ShieldCheck, X } from 'lucide-react';
 import { Logo } from './Logo';
 import { Customer } from '../types';
 import { PHARMACY_WHATSAPP_NUMBER } from '../services/whatsapp';
@@ -35,6 +35,49 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAdmin,
   onOpenGoogleDrive,
 }) => {
+  const [isCartBouncing, setIsCartBouncing] = useState(false);
+  const [showAdminAuthModal, setShowAdminAuthModal] = useState(false);
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [adminAuthError, setAdminAuthError] = useState('');
+
+  // Listen for items landing into the cart to trigger bounce animation
+  useEffect(() => {
+    const handleCartLanded = () => {
+      setIsCartBouncing(true);
+      setTimeout(() => setIsCartBouncing(false), 600);
+    };
+
+    window.addEventListener('cart_item_landed', handleCartLanded);
+    return () => {
+      window.removeEventListener('cart_item_landed', handleCartLanded);
+    };
+  }, []);
+
+  // Handle backup click with strict manager privilege verification
+  const handleBackupClick = () => {
+    // Check if manager is already authenticated in this session
+    const isAuth = sessionStorage.getItem('eldeeb_hub_auth') === 'true';
+    if (isAuth) {
+      onOpenGoogleDrive?.();
+    } else {
+      // Require manager credentials
+      setAdminPinInput('');
+      setAdminAuthError('');
+      setShowAdminAuthModal(true);
+    }
+  };
+
+  const handleVerifyAdminBackup = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPin = adminPinInput.trim();
+    if (cleanPin === 'MOhager191995') {
+      sessionStorage.setItem('eldeeb_hub_auth', 'true');
+      setShowAdminAuthModal(false);
+      onOpenGoogleDrive?.();
+    } else {
+      setAdminAuthError('عفواً، كلمة مرور المدير غير صحيحة. هذا الإعداد من صلاحيات الإدارة فقط.');
+    }
+  };
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 transition-colors font-cairo">
       {/* Top micro-bar: Emergency & Pharmacy Contact */}
@@ -157,15 +200,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </button>
 
-            {/* Google Drive Cloud Sync */}
+            {/* Google Drive Cloud Sync (Admin Privilege Only) */}
             {onOpenGoogleDrive && (
               <button
                 id="google-drive-nav-btn"
-                onClick={onOpenGoogleDrive}
-                className="p-2 sm:p-2.5 rounded-2xl text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-slate-800 transition-colors"
-                title="Google Drive • النسخ الاحتياطي والمزامنة السحابية"
+                onClick={handleBackupClick}
+                className="p-2 sm:p-2.5 rounded-2xl text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-slate-800 transition-colors relative"
+                title="النسخ الاحتياطي السحابي والمزامنة (صلاحيات المدير)"
               >
                 <HardDrive className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-amber-500 text-slate-950 rounded-full flex items-center justify-center shadow" title="يتطلب إذن الإدارة">
+                  <Lock className="w-2 h-2" />
+                </span>
               </button>
             )}
 
@@ -183,19 +229,35 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </button>
 
-            {/* Shopping Cart Button */}
+            {/* Shopping Cart Button with Animated Red Badge & Glowing Dot */}
             <button
               id="cart-nav-btn"
               onClick={onOpenCart}
-              className="p-2 sm:px-3.5 sm:py-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white rounded-2xl font-bold text-xs shadow-md shadow-sky-500/20 flex items-center gap-1.5 transition-all active:scale-95 relative"
+              className={`p-2 sm:px-4 sm:py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white rounded-2xl font-bold text-xs shadow-md shadow-sky-500/20 flex items-center gap-2 transition-all active:scale-95 relative ${
+                isCartBouncing ? 'scale-110 ring-4 ring-rose-400/50 shadow-xl shadow-rose-500/30' : ''
+              }`}
               title="سلة التسوق"
             >
-              <ShoppingCart className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-              <span className="hidden sm:inline">السلة</span>
-              {cartCount > 0 && (
-                <span className="w-5 h-5 bg-rose-500 text-white text-xs font-black rounded-full flex items-center justify-center -mr-1 shadow">
+              <div className="relative">
+                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
+                {cartCount > 0 && (
+                  /* Glowing pulsing red dot */
+                  <span className="absolute -top-1.5 -right-1.5 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600 border border-white dark:border-slate-900"></span>
+                  </span>
+                )}
+              </div>
+
+              <span className="hidden sm:inline font-bold">السلة</span>
+
+              {/* Exact Count Quantity Badge */}
+              {cartCount > 0 ? (
+                <span className="min-w-[20px] h-5 px-1.5 bg-rose-600 text-white text-[11px] font-black rounded-full flex items-center justify-center shadow-md border border-white/60 dark:border-slate-900 animate-in zoom-in-50 duration-200">
                   {cartCount}
                 </span>
+              ) : (
+                <span className="hidden md:inline-block w-2 h-2 rounded-full bg-sky-300/60" />
               )}
             </button>
           </div>
@@ -214,6 +276,68 @@ export const Navbar: React.FC<NavbarProps> = ({
           />
         </div>
       </div>
+
+      {/* Admin Privilege Security Gate Modal for Backup Settings */}
+      {showAdminAuthModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 font-cairo animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400 font-bold text-sm">
+                <ShieldCheck className="w-5 h-5 text-amber-500" />
+                <span>صلاحيات الإدارة فقط</span>
+              </div>
+              <button
+                onClick={() => setShowAdminAuthModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="text-right space-y-1.5">
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                إعدادات <strong>النسخ الاحتياطي السحابي والمزامنة (Google Drive)</strong> من صلاحيات مدير صيدلية الديب فقط.
+              </p>
+              <p className="text-[11px] text-slate-400">
+                يرجى إدخال كلمة مرور الإدارة للمتابعة:
+              </p>
+            </div>
+
+            <form onSubmit={handleVerifyAdminBackup} className="space-y-3">
+              <input
+                type="password"
+                value={adminPinInput}
+                onChange={(e) => setAdminPinInput(e.target.value)}
+                placeholder="كلمة مرور الإدارة..."
+                autoFocus
+                className="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-center tracking-widest outline-none focus:border-sky-500"
+              />
+
+              {adminAuthError && (
+                <p className="text-[11px] text-rose-500 font-medium text-center">
+                  {adminAuthError}
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white rounded-xl text-xs font-bold shadow active:scale-95 transition-all"
+                >
+                  تأكيد والدخول للباك أب
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAdminAuthModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-medium"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

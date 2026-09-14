@@ -57,9 +57,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   // Subtotal
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
-  // 100 EGP spent = 1 point
+  // Loyalty calculation per added product: 100 EGP = 1 point (e.g. 92 EGP = 0.92 point)
   const multiplier = activeCustomer?.tier === 'diamond' ? 2 : activeCustomer?.tier === 'gold' ? 1.5 : activeCustomer?.tier === 'silver' ? 1.2 : 1;
-  const totalEarnedPoints = Math.max(0, Number(((subtotal / 100) * multiplier).toFixed(1)));
+  const totalEarnedPoints = Math.max(
+    0,
+    Number(
+      items
+        .reduce((sum, item) => {
+          const itemPoints = (item.product.price / 100) * item.quantity * multiplier;
+          return sum + itemPoints;
+        }, 0)
+        .toFixed(2)
+    )
+  );
 
   // Points redemption calculation: 1 point = 1 EGP discount
   const availablePoints = activeCustomer?.points || 0;
@@ -246,9 +256,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <h5 className="font-bold text-xs text-slate-900 dark:text-white line-clamp-1">
                       {item.product.nameAr}
                     </h5>
-                    <span className="text-[11px] text-sky-600 dark:text-sky-400 font-bold block">
-                      {item.product.price} ج.م
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-sky-600 dark:text-sky-400 font-bold block">
+                        {item.product.price} ج.م
+                      </span>
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded-md">
+                        +{(item.product.price / 100).toFixed(2)} نقطة
+                      </span>
+                    </div>
 
                     {/* Quantity controls */}
                     <div className="flex items-center gap-2 mt-2">

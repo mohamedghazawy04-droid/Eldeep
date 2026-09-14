@@ -44,6 +44,7 @@ import {
   ProductCategory,
 } from '../types';
 import { CATEGORIES } from '../data/initialData';
+import { CustomersManager } from './CustomersManager';
 import {
   addBroadcastNotification,
   getAdminPin,
@@ -314,7 +315,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       }
 
       const confirmed = window.confirm(
-        `تم العثور على ${parsedProds.length} صنف في النسخة الاحتياطية. هل تريد استيرادها وحفظها سحابياً في قاعدة بيانات صيدليات الديب؟`
+        `تم العثور على ${parsedProds.length} صنف في النسخة الاحتياطية. هل تريد استيرادها وحفظها سحابياً في قاعدة بيانات صيدلية الديب؟`
       );
       if (!confirmed) return;
 
@@ -362,7 +363,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         price: parsedPrice,
         dosageForm: dosageForm.trim() || 'أقراص',
         activeIngredient: activeIngredient.trim() || 'غير محدد',
-        description: description.trim() || 'منتج طبي معتمد من صيدليات الديب.',
+        description: description.trim() || 'منتج طبي معتمد من صيدلية الديب.',
         usage: usage.trim() || 'وفق إرشادات الصيدلي والطبيب.',
         requiresPrescription,
         inStock: !isComingSoon && (isNaN(qtyNumber) || qtyNumber > 0),
@@ -402,7 +403,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       price: parsedPrice,
       dosageForm: dosageForm.trim() || 'أقراص',
       activeIngredient: activeIngredient.trim() || 'غير محدد',
-      description: description.trim() || 'منتج طبي معتمد من صيدليات الديب.',
+      description: description.trim() || 'منتج طبي معتمد من صيدلية الديب.',
       usage: usage.trim() || 'وفق إرشادات الصيدلي والطبيب.',
       requiresPrescription,
       inStock: !isComingSoon && (isNaN(qtyNumber) || qtyNumber > 0),
@@ -484,7 +485,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     if (type === 'lowStock') {
       onBroadcastNotification(
         `⚠️ كمية أوشكت على النفاذ: ${prod.nameAr}`,
-        `تنبيه للعملاء: الكمية المتوفرة من ${prod.nameAr} أوشكت على النفاذ، اطلب علبتك الآن من صيدليات الديب قبل انتهاء المخزون.`,
+        `تنبيه للعملاء: الكمية المتوفرة من ${prod.nameAr} أوشكت على النفاذ، اطلب علبتك الآن من صيدلية الديب قبل انتهاء المخزون.`,
         prod.id
       );
       alert(`تم إرسال إشعار للعملاء بأن ${prod.nameAr} أوشك على النفاذ!`);
@@ -608,7 +609,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
               <Lock className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-sm sm:text-base">لوحة تحكم إدارة صيدليات الديب</h3>
+              <h3 className="font-bold text-sm sm:text-base">لوحة تحكم إدارة صيدلية الديب</h3>
               <p className="text-[11px] text-slate-400">
                 إدارة الأدوية، التنبيهات الذكية، المخزون، والعملاء
               </p>
@@ -1373,7 +1374,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             </span>
                           </div>
                           <p className="text-xs text-slate-300 mt-0.5">
-                            سيرفر سحابي مخصص لصيدليات الديب لحفظ المنتجات، الحسابات، الروشتات، والمخزون بدون أي فقدان للبيانات.
+                            سيرفر سحابي مخصص لصيدلية الديب لحفظ المنتجات، الحسابات، الروشتات، والمخزون بدون أي فقدان للبيانات.
                           </p>
                         </div>
                       </div>
@@ -1524,7 +1525,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   <div className="p-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-2.5 text-xs">
                     <h5 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4 text-sky-600" />
-                      <span>مواصفات التخزين السحابي لصيدليات الديب:</span>
+                      <span>مواصفات التخزين السحابي لصيدلية الديب:</span>
                     </h5>
                     <ul className="space-y-1.5 text-slate-600 dark:text-slate-300 list-disc list-inside">
                       <li>
@@ -1597,66 +1598,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
               {/* TAB 3: REGISTERED CUSTOMERS (ONLINE FIRESTORE GUARANTEE) */}
               {activeTab === 'customers' && (
-                <div className="space-y-4">
-                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-200">
-                      <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-                      <div>
-                        <strong>المزامنة السحابية مضمونة (Firestore Online):</strong> يتم حفظ وتحديث أي عميل يسجل حسابه مباشرة في قاعدة بيانات السيرفر السحابي أونلاين.
-                      </div>
-                    </div>
-
-                    <span className="px-3 py-1 bg-emerald-600 text-white rounded-full font-bold text-[11px] shrink-0">
-                      🟢 متصل أونلاين
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                      قائمة العملاء المسجلين ({customers.length}):
-                    </h4>
-                    <span className="text-[11px] text-slate-500">تحديث لحظي من Firestore</span>
-                  </div>
-
-                  {customers.length === 0 ? (
-                    <div className="py-12 text-center text-slate-400 text-xs bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-                      لم يسجل أي عميل حسابه حتى الآن. بمجرد تسجيل العميل يظهر هنا فورياً ومحفوظاً أونلاين.
-                    </div>
-                  ) : (
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {customers.map((c) => (
-                        <div
-                          key={c.id}
-                          className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs"
-                        >
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 dark:text-white text-sm">
-                                {c.name}
-                              </span>
-                              <span className="bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-bold px-2 py-0.5 rounded-full text-[10px] flex items-center gap-1">
-                                <ShieldCheck className="w-3 h-3 text-sky-600" />
-                                <span>محفوظ أونلاين</span>
-                              </span>
-                            </div>
-                            <div className="text-slate-500 font-mono text-[11px] mt-0.5">{c.phone}</div>
-                            {c.address && (
-                              <div className="text-slate-400 text-[10px] mt-0.5">العنوان: {c.address}</div>
-                            )}
-                          </div>
-
-                          <div className="text-left">
-                            <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 font-bold text-xs">
-                              {c.points} نقطة ({c.tier})
-                            </span>
-                            <div className="text-slate-400 text-[10px] mt-1">
-                              {c.totalOrders || 0} طلبات • انضم: {c.joinedDate || 'حديثاً'}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <div className="pt-1">
+                  <CustomersManager />
                 </div>
               )}
 
@@ -1747,7 +1690,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 <div className="space-y-6 max-w-lg mx-auto py-2">
                   <div className="text-center space-y-1">
                     <h4 className="font-bold text-base text-slate-900 dark:text-white">
-                      شعار وهوية صيدليات الديب
+                      شعار وهوية صيدلية الديب
                     </h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       يمكنك استخدام الشعار الرسمي أو رفع صورتك الخاصة من جهازك ليتم تعيينها كشعار للصفحة فوراً.

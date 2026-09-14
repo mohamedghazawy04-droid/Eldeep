@@ -20,6 +20,7 @@ import {
   saveOrder,
   savePrescription,
   saveCustomer,
+  calculateTier,
 } from './storage';
 
 const PRODUCTS_COL = 'products';
@@ -339,6 +340,34 @@ export async function syncSaveCustomerToFirestore(
     console.error('Failed to save customer to Firestore:', err);
     return { success: false, isOnline: false, error: err?.message || 'خطأ في الحفظ السحابي' };
   }
+}
+
+/**
+ * Delete a Customer from Firestore
+ */
+export async function syncDeleteCustomerFromFirestore(customer: Customer): Promise<void> {
+  if (!isFirebaseReady) return;
+  try {
+    const docId = customer.phone.replace(/[^\d+]/g, '') || customer.id;
+    await deleteDoc(doc(db, CUSTOMERS_COL, docId));
+  } catch (err) {
+    console.error('Failed to delete customer from Firestore:', err);
+  }
+}
+
+/**
+ * Update Customer Points directly in Firestore
+ */
+export async function syncUpdateCustomerPointsInFirestore(
+  customer: Customer,
+  newPoints: number
+): Promise<{ success: boolean; isOnline: boolean }> {
+  const updatedCustomer: Customer = {
+    ...customer,
+    points: newPoints,
+    tier: calculateTier(newPoints),
+  };
+  return syncSaveCustomerToFirestore(updatedCustomer);
 }
 
 /**

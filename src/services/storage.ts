@@ -17,7 +17,7 @@ const STORAGE_KEYS = {
 export function recalculateProductLoyaltyPoints(price: number): number {
   if (!price || price <= 0) return 0;
   const pts = price / 100;
-  return Number(pts.toFixed(1));
+  return Number(pts.toFixed(2));
 }
 
 export function ensureProductLoyaltySystem(products: Product[]): Product[] {
@@ -84,11 +84,26 @@ export function saveCustomer(customer: Customer): void {
     customer.tier = calculateTier(customer.points);
     localStorage.setItem(STORAGE_KEYS.CUSTOMER, JSON.stringify(customer));
 
-    // Also update in all customers directory
+    // Also update in all customers directory with strict loyalty points protection
     const all = getStoredAllCustomers();
-    const existingIndex = all.findIndex((c) => c.phone === customer.phone || c.id === customer.id);
+    const cleanPhone = customer.phone ? customer.phone.replace(/[^\d+]/g, '') : '';
+    const existingIndex = all.findIndex(
+      (c) =>
+        (cleanPhone && c.phone && c.phone.replace(/[^\d+]/g, '') === cleanPhone) ||
+        c.id === customer.id
+    );
+
     if (existingIndex >= 0) {
-      all[existingIndex] = customer;
+      const existing = all[existingIndex];
+      all[existingIndex] = {
+        ...existing,
+        ...customer,
+        // Safeguard points: points should not be silently reduced by login/re-registration
+        points: customer.points !== undefined ? customer.points : existing.points,
+        tier: calculateTier(customer.points !== undefined ? customer.points : existing.points),
+        totalOrders: Math.max(customer.totalOrders || 0, existing.totalOrders || 0),
+        joinedDate: existing.joinedDate || customer.joinedDate,
+      };
     } else {
       all.unshift(customer);
     }
@@ -96,6 +111,105 @@ export function saveCustomer(customer: Customer): void {
   } catch (e) {
     console.error('Failed to save customer', e);
   }
+}
+
+export function saveAllCustomers(customers: Customer[]): void {
+  try {
+    const calibrated = customers.map((c) => ({
+      ...c,
+      tier: calculateTier(c.points || 0),
+    }));
+    localStorage.setItem(STORAGE_KEYS.ALL_CUSTOMERS, JSON.stringify(calibrated));
+  } catch (e) {
+    console.error('Failed to save all customers', e);
+  }
+}
+
+export function deleteStoredCustomer(customerId: string): Customer[] {
+  try {
+    const all = getStoredAllCustomers().filter((c) => c.id !== customerId);
+    saveAllCustomers(all);
+
+    // If active customer was deleted, clear active session
+    const active = getStoredCustomer();
+    if (active && active.id === customerId) {
+      localStorage.removeItem(STORAGE_KEYS.CUSTOMER);
+    }
+    return all;
+  } catch (e) {
+    console.error('Failed to delete customer', e);
+    return getStoredAllCustomers();
+  }
+}
+
+export function updateStoredCustomerPoints(customerId: string, newPoints: number): Customer[] {
+  try {
+    const all = getStoredAllCustomers().map((c) => {
+      if (c.id === customerId) {
+        const pts = Math.max(0, newPoints);
+        return {
+          ...c,
+          points: pts,
+          tier: calculateTier(pts),
+        };
+      }
+      return c;
+    });
+    saveAllCustomers(all);
+
+    const active = getStoredCustomer();
+    if (active && active.id === customerId) {
+      const updatedActive = {
+        ...active,
+        points: Math.max(0, newPoints),
+        tier: calculateTier(Math.max(0, newPoints)),
+      };
+      localStorage.setItem(STORAGE_KEYS.CUSTOMER, JSON.stringify(updatedActive));
+    }
+    return all;
+  } catch (e) {
+    console.error('Failed to update customer points', e);
+    return getStoredAllCustomers();
+  }
+}
+
+export function exportCustomersAsJson(customers: Customer[]): void {
+  const payload = {
+    pharmacy: 'صيدلية الديب - El Deeb Pharmacy',
+    type: 'customers_and_loyalty_points',
+    exportedAt: new Date().toISOString(),
+    totalCustomers: customers.length,
+    customers,
+  };
+  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+  const a = document.createElement('a');
+  a.setAttribute('href', dataStr);
+  a.setAttribute('download', `eldeeb_customers_loyalty_${new Date().toISOString().slice(0, 10)}.json`);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+export function exportCustomersAsCsv(customers: Customer[]): void {
+  const header = ['الاسم', 'رقم الهاتف', 'العنوان', 'رصيد نقاط الولاء', 'المستوى', 'إجمالي الطلبات', 'تاريخ الانضمام'];
+  const rows = customers.map((c) => [
+    `"${(c.name || '').replace(/"/g, '""')}"`,
+    `"${(c.phone || '').replace(/"/g, '""')}"`,
+    `"${(c.address || '').replace(/"/g, '""')}"`,
+    c.points || 0,
+    `"${c.tier || 'bronze'}"`,
+    c.totalOrders || 0,
+    `"${c.joinedDate || ''}"`,
+  ]);
+  const csvContent = '\uFEFF' + [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.setAttribute('href', url);
+  a.setAttribute('download', `eldeeb_customers_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 export function getStoredAllCustomers(): Customer[] {
@@ -231,7 +345,7 @@ export function saveTheme(theme: 'light' | 'dark'): void {
 export function getAdminPin(): string {
   try {
     const pin = localStorage.getItem(STORAGE_KEYS.ADMIN_PIN);
-    if (pin && pin !== '1234' && pin !== '1995') return pin;
+    if (pin && pin.trim() && pin !== '1234' && pin !== '1995' && pin !== '123456') return pin;
   } catch {
     // ignore
   }

@@ -49,6 +49,7 @@ import { Product, Customer, AppNotification, ProductCategory } from '../types';
 import { CATEGORIES } from '../data/initialData';
 import { GeminiProductStudio } from './GeminiProductStudio';
 import { GoogleDriveModal } from './GoogleDriveModal';
+import { CustomersManager } from './CustomersManager';
 import {
   syncAddProductToFirestore,
   syncDeleteProductFromFirestore,
@@ -512,7 +513,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         price: parsedPrice,
         dosageForm: dosageForm.trim() || existing?.dosageForm || 'أقراص',
         activeIngredient: activeIngredient.trim() || existing?.activeIngredient || 'غير محدد',
-        description: description.trim() || existing?.description || 'منتج طبي معتمد من صيدليات الديب.',
+        description: description.trim() || existing?.description || 'منتج طبي معتمد من صيدلية الديب.',
         usage: existing?.usage || 'وفق إرشادات الصيدلي.',
         requiresPrescription,
         inStock: !isComingSoon && (isNaN(qtyNumber) || qtyNumber > 0),
@@ -537,7 +538,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         price: parsedPrice,
         dosageForm: dosageForm.trim() || 'أقراص',
         activeIngredient: activeIngredient.trim() || 'غير محدد',
-        description: description.trim() || 'منتج طبي معتمد من صيدليات الديب.',
+        description: description.trim() || 'منتج طبي معتمد من صيدلية الديب.',
         usage: 'وفق استشارة الصيدلي.',
         requiresPrescription,
         inStock: !isComingSoon && (isNaN(qtyNumber) || qtyNumber > 0),
@@ -994,7 +995,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         type="text"
                         value={newAppDesc}
                         onChange={(e) => setNewAppDesc(e.target.value)}
-                        placeholder="نبذة عن وظيفة هذا النظام في صيدليات الديب"
+                        placeholder="نبذة عن وظيفة هذا النظام في صيدلية الديب"
                         className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
                       />
                     </div>
@@ -1285,15 +1286,37 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setIsStudioOpen(true)}
-                        className="px-4 py-2 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 text-white rounded-xl font-bold text-xs shadow-md flex items-center gap-2"
+                        className="px-4 py-2 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 text-white rounded-xl font-bold text-xs shadow-md flex items-center gap-2 active:scale-95"
                       >
                         <Camera className="w-4 h-4" />
                         <span>كاميرا ستوديو جيميناي</span>
                       </button>
+
+                      <label className="cursor-pointer px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold text-xs shadow-md flex items-center gap-2 active:scale-95 transition-colors">
+                        <Upload className="w-4 h-4 text-cyan-400" />
+                        <span>رفع من الجهاز</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const res = ev.target?.result as string;
+                                if (res) setImage(res);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
                     </div>
                   </div>
 
@@ -1428,41 +1451,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
           {/* ================= TAB 4: CUSTOMERS & LOYALTY ================= */}
           {activeTab === 'customers' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Users className="w-5 h-5 text-emerald-400" />
-                  <span>سجل عملاء صيدلية الديب ونقاط الولاء ({customersList.length})</span>
-                </h3>
-                <p className="text-xs text-slate-400">
-                  قائمة العملاء المسجلين، أرقام الهواتف، العناوين، ورصيد النقاط الفعلي.
-                </p>
-              </div>
-
-              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                {customersList.map((c) => (
-                  <div
-                    key={c.id}
-                    className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl flex items-center justify-between text-xs"
-                  >
-                    <div>
-                      <div className="font-bold text-white flex items-center gap-2">
-                        <span>{c.name}</span>
-                        <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded-full font-mono">
-                          {c.tier}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400 font-mono mt-0.5">{c.phone}</div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">{c.address}</div>
-                    </div>
-
-                    <div className="text-left">
-                      <div className="font-mono font-black text-amber-400 text-sm">{c.points} نقطة</div>
-                      <div className="text-[10px] text-slate-400">إجمالي الطلبات: {c.totalOrders || 0}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+              <CustomersManager isDarkTheme={true} />
             </div>
           )}
 

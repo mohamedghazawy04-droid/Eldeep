@@ -57,7 +57,7 @@ export function createOrderWhatsAppUrl(
   }
 
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `📍 شكراً لتسوقكم من صيدليات الديب. في انتظار تأكيد الطلب وسرعة التوصيل.`;
+  message += `📍 شكراً لتسوقكم من صيدلية الديب. في انتظار تأكيد الطلب وسرعة التوصيل.`;
 
   return `https://wa.me/${PHARMACY_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 }
