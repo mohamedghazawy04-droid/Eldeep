@@ -7,6 +7,13 @@ export async function getManagerSession(): Promise<boolean> {
   return data.session?.user.email?.toLowerCase() === MANAGER_EMAIL;
 }
 
+export function watchManagerSession(onChange: (allowed: boolean) => void): () => void {
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    onChange(session?.user.email?.toLowerCase() === MANAGER_EMAIL);
+  });
+  return () => data.subscription.unsubscribe();
+}
+
 export async function requestManagerMagicLink(): Promise<{ success: boolean; error?: string }> {
   const { error } = await supabase.auth.signInWithOtp({
     email: MANAGER_EMAIL,

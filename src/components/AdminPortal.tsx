@@ -57,7 +57,7 @@ import {
   syncBroadcastNotificationToFirestore,
 } from '../services/firestoreSync';
 import { getStoredAllCustomers, getStoredOrders, getStoredPrescriptions } from '../services/storage';
-import { getManagerSession, requestManagerMagicLink, signInManagerWithGoogle, signOutManager, MANAGER_EMAIL } from '../services/adminAuth';
+import { getManagerSession, requestManagerMagicLink, signInManagerWithGoogle, signOutManager, watchManagerSession, MANAGER_EMAIL } from '../services/adminAuth';
 
 export interface GitHubAppItem {
   id: string;
@@ -294,6 +294,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   useEffect(() => {
     getManagerSession().then((allowed) => setIsAuthenticated(allowed));
+    return watchManagerSession((allowed) => {
+      setIsAuthenticated(allowed);
+      if (allowed) setAuthNotice('تم تسجيل دخول المدير بنجاح.');
+    });
   }, []);
 
   // Active Hub Navigation Tab
