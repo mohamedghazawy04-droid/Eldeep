@@ -91,9 +91,9 @@ export interface GitHubAppItem {
 
 interface AdminPortalProps {
   products: Product[];
-  onAddProduct: (product: Product) => void;
+  onAddProduct: (product: Product) => Promise<{ success: boolean; isOnline: boolean; error?: string }>;
   onDeleteProduct: (productId: string) => void;
-  onUpdateProduct: (product: Product) => void;
+  onUpdateProduct: (product: Product) => Promise<{ success: boolean; isOnline: boolean; error?: string }>;
   onClearAllProducts?: () => void;
   onBatchImportProducts?: (products: Product[]) => void;
   onBroadcastNotification: (title: string, message: string) => void;
@@ -339,6 +339,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [requiresPrescription, setRequiresPrescription] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
 
   // Push Broadcast Notification Form
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -489,8 +490,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   };
 
   // Product Save / Edit Handler
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingProduct) return;
     if (!nameAr.trim() || !price) {
       alert('يرجى ملء اسم الصنف والسعر');
       return;
@@ -525,8 +527,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         isComingSoon,
       };
 
-      onUpdateProduct(updated);
-      syncAddProductToFirestore(updated);
+      setIsSavingProduct(true);
+      const result = await onUpdateProduct(updated);
+      setIsSavingProduct(false);
+      if (!result.success || !result.isOnline) {
+        alert(result.error || 'تم الحفظ محلياً فقط. تعذر مزامنة المنتج مع السحابة.');
+        return;
+      }
       resetProductForm();
       alert(`تم حفظ تعديل ${updated.nameAr} بنجاح!`);
     } else {
@@ -550,8 +557,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         isComingSoon,
       };
 
-      onAddProduct(newProd);
-      syncAddProductToFirestore(newProd);
+      setIsSavingProduct(true);
+      const result = await onAddProduct(newProd);
+      setIsSavingProduct(false);
+      if (!result.success || !result.isOnline) {
+        alert(result.error || 'تم الحفظ محلياً فقط. تعذر مزامنة المنتج مع السحابة.');
+        return;
+      }
       resetProductForm();
       alert(`تمت إضافة ${newProd.nameAr} بنجاح للكتالوج!`);
     }

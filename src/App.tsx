@@ -278,11 +278,11 @@ export default function App() {
   };
 
   // Admin handlers
-  const handleAddProduct = (newProd: Product) => {
+  const handleAddProduct = async (newProd: Product) => {
     const updated = [newProd, ...products];
     setProducts(updated);
     saveProducts(updated);
-    syncAddProductToFirestore(newProd);
+    return syncAddProductToFirestore(newProd);
   };
 
   const handleDeleteProduct = (id: string) => {
@@ -292,11 +292,11 @@ export default function App() {
     syncDeleteProductFromFirestore(id);
   };
 
-  const handleUpdateProduct = (updatedProd: Product) => {
+  const handleUpdateProduct = async (updatedProd: Product) => {
     const updated = products.map((p) => (p.id === updatedProd.id ? updatedProd : p));
     setProducts(updated);
     saveProducts(updated);
-    syncAddProductToFirestore(updatedProd);
+    return syncAddProductToFirestore(updatedProd);
   };
 
   const handleClearAllProducts = async () => {
