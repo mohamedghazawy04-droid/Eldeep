@@ -2,7 +2,24 @@ import { Customer, OrderRecord } from '../types';
 import { isSupabaseReady, supabase } from './supabase';
 
 function normalizePhone(phone: string): string {
-  return phone.replace(/[^\d+]/g, '');
+  const clean = phone.replace(/[^\d+]/g, '');
+  if (clean.startsWith('01')) return `+20${clean.slice(1)}`;
+  if (clean.startsWith('20')) return `+${clean}`;
+  return clean;
+}
+
+export function customerAuthPhone(phone: string): string {
+  return normalizePhone(phone);
+}
+
+export async function sendCustomerOtp(phone: string): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase.auth.signInWithOtp({ phone: normalizePhone(phone) });
+  return error ? { success: false, error: error.message } : { success: true };
+}
+
+export async function verifyCustomerOtp(phone: string, token: string): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase.auth.verifyOtp({ phone: normalizePhone(phone), token, type: 'sms' });
+  return error ? { success: false, error: error.message } : { success: true };
 }
 
 function customerToRow(customer: Customer) {
@@ -42,12 +59,16 @@ export async function fetchSupabaseCustomer(phone: string): Promise<Customer | n
 
 export async function upsertSupabaseCustomer(customer: Customer): Promise<{ success: boolean; error?: string }> {
   if (!isSupabaseReady) return { success: false, error: 'Supabase غير مُعد' };
-  const { error } = await supabase.from('customers').upsert(customerToRow(customer), { onConflict: 'phone' });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: 'يجب التحقق من رقم الهاتف أولاً' };
+  const { error } = await supabase.from('customers').upsert({ ...customerToRow(customer), user_id: user.id }, { onConflict: 'phone' });
   return error ? { success: false, error: error.message } : { success: true };
 }
 
 export async function upsertSupabaseOrder(order: OrderRecord): Promise<{ success: boolean; error?: string }> {
   if (!isSupabaseReady) return { success: false, error: 'Supabase غير مُعد' };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: 'يجب التحقق من رقم الهاتف أولاً' };
   const { error } = await supabase.from('orders').upsert({
     id: order.id,
     customer_phone: normalizePhone(order.customerPhone),
@@ -62,6 +83,7 @@ export async function upsertSupabaseOrder(order: OrderRecord): Promise<{ success
     order_date: order.date,
     status: order.status,
     notes: order.notes || '',
+    user_id: user.id,
   }, { onConflict: 'id' });
   return error ? { success: false, error: error.message } : { success: true };
 }

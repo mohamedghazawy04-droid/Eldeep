@@ -5,7 +5,7 @@ import { Customer } from '../types';
 import { DeliveryCaptainAnimation } from './DeliveryCaptainAnimation';
 import { calculateTier, saveCustomer, getStoredAllCustomers } from '../services/storage';
 import { syncSaveCustomerToFirestore, fetchCustomerFromFirestore } from '../services/firestoreSync';
-import { fetchSupabaseCustomer, upsertSupabaseCustomer } from '../services/supabaseCustomers';
+import { fetchSupabaseCustomer, sendCustomerOtp, upsertSupabaseCustomer, verifyCustomerOtp } from '../services/supabaseCustomers';
 
 interface CustomerWelcomeLoginModalProps {
   isOpen: boolean;
@@ -24,12 +24,18 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
   const [isFocused, setIsFocused] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [detectedAccountMsg, setDetectedAccountMsg] = useState<string | null>(null);
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
 
   if (!isOpen) return null;
 
   // Auto-detect existing account when typing phone number to reassure customer
   const handlePhoneChange = async (val: string) => {
     setPhone(val);
+    setOtp('');
+    setOtpSent(false);
+    setOtpVerified(false);
     const clean = val.replace(/[^\d+]/g, '');
     if (clean.length >= 10) {
       const allLocal = getStoredAllCustomers();
@@ -64,6 +70,26 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
     setIsSubmitting(true);
 
     const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
+    if (!otpVerified) {
+      if (!otpSent) {
+        const sent = await sendCustomerOtp(cleanPhone);
+        setIsSubmitting(false);
+        if (!sent.success) {
+          alert(`تعذر إرسال رمز التحقق: ${sent.error || 'تحقق من إعداد SMS في Supabase'}`);
+          return;
+        }
+        setOtpSent(true);
+        alert('تم إرسال رمز تحقق SMS إلى هاتفك. اكتب الرمز ثم اضغط متابعة.');
+        return;
+      }
+      const verified = await verifyCustomerOtp(cleanPhone, otp.trim());
+      if (!verified.success) {
+        setIsSubmitting(false);
+        alert('رمز التحقق غير صحيح أو انتهت صلاحيته.');
+        return;
+      }
+      setOtpVerified(true);
+    }
     const allLocal = getStoredAllCustomers();
     const existingLocal = allLocal.find((c) => c.phone.replace(/[^\d+]/g, '') === cleanPhone);
     const existingCloud = (await fetchSupabaseCustomer(cleanPhone)) || (await fetchCustomerFromFirestore(cleanPhone));
@@ -194,6 +220,22 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
                     <span>{detectedAccountMsg}</span>
                   </div>
                 )}
+                {otpSent && !otpVerified && (
+                  <div className="mt-2">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      رمز التحقق المرسل إلى الهاتف
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="123456"
+                      className="w-full px-3 py-2.5 bg-amber-50 dark:bg-amber-950/30 text-slate-900 dark:text-white rounded-xl text-center tracking-[0.4em] border border-amber-300 outline-none"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -221,7 +263,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
                   className="w-full py-3 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white rounded-2xl font-bold text-xs sm:text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>{isSubmitting ? 'جاري تفعيل الحساب...' : 'دخول واستلام 50 نقطة هدية 🎁'}</span>
+                  <span>{isSubmitting ? 'جاري التحقق...' : otpSent && !otpVerified ? 'تأكيد رمز الهاتف' : 'إرسال رمز التحقق للهاتف'}</span>
                 </button>
 
                 <button
