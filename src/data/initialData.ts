@@ -75,7 +75,7 @@ export const INITIAL_NOTIFICATIONS = [
   {
     id: 'notif-1',
     title: '🎉 مرحباً بك في صيدلية الديب!',
-    message: 'سجل حسابك الآن واحصل على 50 نقطة ولاء مجانية فورية عند طلبك الأول.',
+    message: 'سجل حسابك الآن واجمع نقاط ولاء مع كل طلب واستبدلها بخصومات فورية بالسلة.',
     date: 'منذ قليل',
     read: false,
     type: 'loyalty' as const,

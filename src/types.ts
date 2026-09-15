@@ -41,6 +41,8 @@ export interface Customer {
   name: string;
   phone: string;
   email?: string;
+  isEmailVerified?: boolean;
+  emailVerifiedAt?: string;
   address: string;
   points: number;
   tier: LoyaltyTier;
@@ -75,7 +77,6 @@ export interface OrderRecord {
   id: string;
   customerName: string;
   customerPhone: string;
-  customerEmail?: string;
   customerAddress: string;
   items: { productName: string; quantity: number; price: number }[];
   totalPrice: number;

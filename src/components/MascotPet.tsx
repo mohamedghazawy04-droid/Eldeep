@@ -67,14 +67,11 @@ export const MascotPet: React.FC<MascotPetProps> = ({
     setIsDailySpecial(false);
     setShowSpeech(true);
 
-    // Easter egg: bonus loyalty reward every 5 clicks!
+    // Easter egg: friendly celebration every 5 clicks (points earned solely through purchases)
     if (nextClicks % 5 === 0 && !rewardClaimed) {
       setMood('celebrating');
-      setSpeech('🎉 ياهو! نقرت عليا 5 مرات! كسبت 15 نقطة ولاء هدية من صيدلية الديب!');
+      setSpeech('🎉 ياهو! نقرت عليا 5 مرات! صيدلية الديب تتمنى لك دوام الصحة والعافية!');
       setRewardClaimed(true);
-      if (onRewardPoints) {
-        onRewardPoints(15);
-      }
       try {
         confetti({
           particleCount: 50,

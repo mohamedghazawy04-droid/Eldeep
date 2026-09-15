@@ -191,10 +191,12 @@ export function exportCustomersAsJson(customers: Customer[]): void {
 }
 
 export function exportCustomersAsCsv(customers: Customer[]): void {
-  const header = ['الاسم', 'رقم الهاتف', 'العنوان', 'رصيد نقاط الولاء', 'المستوى', 'إجمالي الطلبات', 'تاريخ الانضمام'];
+  const header = ['الاسم', 'رقم الهاتف', 'البريد الإلكتروني', 'حالة تأكيد البريد', 'العنوان', 'رصيد نقاط الولاء', 'المستوى', 'إجمالي الطلبات', 'تاريخ الانضمام'];
   const rows = customers.map((c) => [
     `"${(c.name || '').replace(/"/g, '""')}"`,
     `"${(c.phone || '').replace(/"/g, '""')}"`,
+    `"${(c.email || '').replace(/"/g, '""')}"`,
+    `"${c.isEmailVerified ? 'مؤكد ومفعل' : 'غير مؤكد'}"`,
     `"${(c.address || '').replace(/"/g, '""')}"`,
     c.points || 0,
     `"${c.tier || 'bronze'}"`,
@@ -349,7 +351,7 @@ export function getAdminPin(): string {
   } catch {
     // ignore
   }
-  return '__HASHED_DEFAULT__';
+  return 'MOhager191995';
 }
 
 export function setAdminPin(newPin: string): void {
@@ -392,7 +394,21 @@ export function saveStoredLogo(logoUrl: string | null): void {
     } else {
       localStorage.setItem(STORAGE_KEYS.CUSTOM_LOGO, logoUrl);
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('eldeeb_logo_updated'));
+      // Dynamically update favicon
+      try {
+        const favicon = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
+        if (favicon) {
+          favicon.href = logoUrl || '/eldeeb_pharmacy_logo.jpg';
+        }
+      } catch {
+        // ignore
+      }
+    }
   } catch (e) {
     console.error('Failed to save logo', e);
   }
 }
+
+

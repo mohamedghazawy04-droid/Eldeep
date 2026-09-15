@@ -437,6 +437,7 @@ export default function App() {
         onOpenLoyalty={() => setIsLoyaltyOpen(true)}
         onOpenPrescription={() => setIsPrescriptionOpen(true)}
         onOpenGoogleDrive={() => setIsGoogleDriveOpen(true)}
+        onOpenLogin={() => setIsWelcomeLoginOpen(true)}
         onOpenAdmin={() => {
           window.location.hash = 'hub';
           setViewMode('admin');

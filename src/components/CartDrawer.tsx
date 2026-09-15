@@ -236,13 +236,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         totalOrders: currentCustomer.totalOrders + 1,
       };
     } else {
-      // Auto-create customer profile with 50 welcome points plus earned points
+      // Auto-create customer profile with only earned points from this order
       updatedCustomerObj = {
         id: 'cust-' + Date.now(),
         name: customerName.trim(),
         phone: customerPhone.trim(),
         address: customerAddress.trim(),
-        points: Number((50 + totalEarnedPoints).toFixed(1)),
+        points: Number(totalEarnedPoints.toFixed(1)),
         tier: 'bronze',
         totalOrders: 1,
         joinedDate: new Date().toISOString(),

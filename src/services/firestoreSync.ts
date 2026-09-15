@@ -486,3 +486,78 @@ export async function syncBroadcastNotificationToFirestore(
     console.error('Failed to broadcast notification to Firestore:', err);
   }
 }
+
+/**
+ * Settings & Branding Synchronization for El Deeb Pharmacy
+ */
+export const SETTINGS_COL = 'settings';
+export const BRANDING_DOC_ID = 'branding';
+
+export interface BrandingSettings {
+  logoUrl: string | null;
+  updatedAt: number;
+}
+
+/**
+ * Save custom logo to Firestore so all clients and devices see it
+ */
+export async function syncSaveLogoToFirestore(logoUrl: string | null): Promise<boolean> {
+  if (!isFirebaseReady) return false;
+  try {
+    const docRef = doc(db, SETTINGS_COL, BRANDING_DOC_ID);
+    await setDoc(docRef, {
+      logoUrl: logoUrl || null,
+      updatedAt: Date.now(),
+    }, { merge: true });
+    return true;
+  } catch (err) {
+    console.error('Failed to sync logo to Firestore:', err);
+    return false;
+  }
+}
+
+/**
+ * Fetch current logo from Firestore
+ */
+export async function fetchLogoFromFirestore(): Promise<string | null> {
+  if (!isFirebaseReady) return null;
+  try {
+    const docRef = doc(db, SETTINGS_COL, BRANDING_DOC_ID);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      return (data.logoUrl as string) || null;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch logo from Firestore:', err);
+  }
+  return null;
+}
+
+/**
+ * Real-time subscription to logo updates in Firestore
+ */
+export function subscribeToFirestoreLogo(
+  onUpdate: (logoUrl: string | null) => void
+): () => void {
+  if (!isFirebaseReady) return () => {};
+  try {
+    const docRef = doc(db, SETTINGS_COL, BRANDING_DOC_ID);
+    return onSnapshot(
+      docRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          onUpdate((data.logoUrl as string) || null);
+        } else {
+          onUpdate(null);
+        }
+      },
+      (err) => console.warn('Firestore logo sync listener err:', err)
+    );
+  } catch (e) {
+    console.error('Logo sync subscription failed:', e);
+    return () => {};
+  }
+}
+

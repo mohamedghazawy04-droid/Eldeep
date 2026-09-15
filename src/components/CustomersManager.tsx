@@ -19,6 +19,8 @@ import {
   MapPin,
   RefreshCw,
   Gift,
+  Mail,
+  CheckCircle2,
 } from 'lucide-react';
 import { Customer, LoyaltyTier } from '../types';
 import {
@@ -53,8 +55,10 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
   // Form states
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
+  const [formEmail, setFormEmail] = useState('');
+  const [formIsEmailVerified, setFormIsEmailVerified] = useState(false);
   const [formAddress, setFormAddress] = useState('');
-  const [formPoints, setFormPoints] = useState<number>(10);
+  const [formPoints, setFormPoints] = useState<number>(0);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -75,6 +79,19 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
     setTimeout(() => {
       setToastMessage(null);
     }, 3000);
+  };
+
+  // Manual Email Verification toggle by Admin
+  const handleManualVerifyEmail = async (cust: Customer) => {
+    const updated: Customer = {
+      ...cust,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date().toISOString(),
+    };
+    saveCustomer(updated);
+    setCustomers((prev) => prev.map((c) => (c.id === cust.id ? updated : c)));
+    showToast(`تم تأكيد وتفعيل بريد العميل ${cust.name} بنجاح ✅`);
+    await syncSaveCustomerToFirestore(updated);
   };
 
   // Quick Bonus Points (+5, +10, +50)
@@ -127,6 +144,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
     setEditingCustomer(cust);
     setFormName(cust.name);
     setFormPhone(cust.phone);
+    setFormEmail(cust.email || '');
+    setFormIsEmailVerified(Boolean(cust.isEmailVerified));
     setFormAddress(cust.address || '');
     setFormPoints(cust.points || 0);
   };
@@ -136,8 +155,10 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
     setIsAddOpen(true);
     setFormName('');
     setFormPhone('');
+    setFormEmail('');
+    setFormIsEmailVerified(true);
     setFormAddress('');
-    setFormPoints(10); // 10 welcome points
+    setFormPoints(0); // Points start at 0, earned through purchases
   };
 
   // Save Customer (Add or Edit)
@@ -156,6 +177,9 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
         ...editingCustomer,
         name: formName.trim(),
         phone: formPhone.trim(),
+        email: formEmail.trim().toLowerCase() || undefined,
+        isEmailVerified: formIsEmailVerified,
+        emailVerifiedAt: formIsEmailVerified ? (editingCustomer.emailVerifiedAt || new Date().toISOString()) : undefined,
         address: formAddress.trim(),
         points: pts,
         tier: calculateTier(pts),
@@ -170,6 +194,9 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
         id: 'cust-' + Date.now(),
         name: formName.trim(),
         phone: formPhone.trim(),
+        email: formEmail.trim().toLowerCase() || undefined,
+        isEmailVerified: formIsEmailVerified,
+        emailVerifiedAt: formIsEmailVerified ? new Date().toISOString() : undefined,
         address: formAddress.trim(),
         points: pts,
         tier: calculateTier(pts),
@@ -453,6 +480,23 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
                           </button>
                         </div>
 
+                        {c.email && (
+                          <div className="flex items-center gap-1.5 font-mono">
+                            <Mail className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{c.email}</span>
+                            {c.isEmailVerified ? (
+                              <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                <span>مؤكد ومفعل</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-1.5 py-0.5 rounded-md font-bold">
+                                بانتظار التأكيد ⏳
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {c.address && (
                           <div className="flex items-center gap-1 text-slate-500">
                             <MapPin className="w-3.5 h-3.5 text-slate-400" />
@@ -483,8 +527,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
 
                 {/* Bottom Interactive Control Center: Quick Bonus + Edit + WhatsApp + Delete */}
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  {/* Quick Reward Buttons */}
-                  <div className="flex items-center gap-1.5">
+                  {/* Quick Reward Buttons & Manual Verify */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[11px] font-bold text-slate-400 ml-1">إضافة مكافأة:</span>
                     <button
                       onClick={() => handleQuickAddPoints(c, 5)}
@@ -504,6 +548,17 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
                     >
                       +50 نقطة 🎁
                     </button>
+
+                    {!c.isEmailVerified && (
+                      <button
+                        onClick={() => handleManualVerifyEmail(c)}
+                        className="px-2.5 py-1 bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-700 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700 rounded-xl font-bold text-[11px] flex items-center gap-1 transition-all active:scale-95 shadow-2xs"
+                        title="تأكيد وتفعيل بريد العميل يدوياً"
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span>تأكيد البريد يدوياً</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* Operational Controls */}
@@ -601,6 +656,31 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
                     placeholder="010XXXXXXXX"
                     className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-sky-500 font-mono"
                   />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    البريد الإلكتروني للعميل
+                  </label>
+                  <input
+                    type="email"
+                    value={formEmail}
+                    onChange={(e) => setFormEmail(e.target.value)}
+                    placeholder="customer@example.com"
+                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-sky-500 font-mono text-left"
+                    dir="ltr"
+                  />
+                  <label className="mt-2 flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={formIsEmailVerified}
+                      onChange={(e) => setFormIsEmailVerified(e.target.checked)}
+                      className="rounded text-sky-600 focus:ring-sky-500 w-4 h-4"
+                    />
+                    <span className="text-slate-700 dark:text-slate-300 font-bold text-[11px]">
+                      تم تأكيد البريد الإلكتروني وتفعيله (حساب موثق ✅)
+                    </span>
+                  </label>
                 </div>
 
                 <div>

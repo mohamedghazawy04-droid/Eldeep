@@ -122,7 +122,7 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
           <div className="relative">
             <Award className="w-5 h-5 mb-0.5" />
             <span className="absolute -top-1 -right-2 text-[9px] bg-amber-500 text-slate-950 font-black px-1 rounded-full font-mono">
-              {activeCustomer ? activeCustomer.points : '50'}
+              {activeCustomer ? activeCustomer.points : '0'}
             </span>
           </div>
           <span className="text-[10px] font-bold">نقاطي</span>

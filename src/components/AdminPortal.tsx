@@ -44,6 +44,7 @@ import {
   CloudUpload,
   Upload,
   ImageIcon,
+  RotateCcw,
 } from 'lucide-react';
 import { Product, Customer, AppNotification, ProductCategory } from '../types';
 import { CATEGORIES } from '../data/initialData';
@@ -55,9 +56,10 @@ import {
   syncDeleteProductFromFirestore,
   syncClearAllFirestoreProducts,
   syncBroadcastNotificationToFirestore,
+  syncSaveLogoToFirestore,
 } from '../services/firestoreSync';
-import { getStoredAllCustomers, getStoredOrders, getStoredPrescriptions } from '../services/storage';
-import { getManagerSession, requestManagerMagicLink, signInManagerWithGoogle, signOutManager, watchManagerSession, MANAGER_EMAIL } from '../services/adminAuth';
+import { getStoredAllCustomers, getStoredOrders, getStoredPrescriptions, getStoredLogo, saveStoredLogo } from '../services/storage';
+import { optimizeProductImage } from '../utils/imageOptimizer';
 
 export interface GitHubAppItem {
   id: string;
@@ -92,9 +94,9 @@ export interface GitHubAppItem {
 
 interface AdminPortalProps {
   products: Product[];
-  onAddProduct: (product: Product) => Promise<{ success: boolean; isOnline: boolean; error?: string }>;
+  onAddProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
-  onUpdateProduct: (product: Product) => Promise<{ success: boolean; isOnline: boolean; error?: string }>;
+  onUpdateProduct: (product: Product) => void;
   onClearAllProducts?: () => void;
   onBatchImportProducts?: (products: Product[]) => void;
   onBroadcastNotification: (title: string, message: string) => void;
@@ -195,8 +197,8 @@ const DEFAULT_GITHUB_APPS: GitHubAppItem[] = [
   },
   {
     id: 'app-delivery-captain',
-    name: 'تطبيق كابتن التوصيل السريع (فيزبا الديب)',
-    nameEn: 'Vespa Courier Driver Companion App',
+    name: 'تطبيق كابتن التوصيل السريع (موتوسيكل سباق الديب)',
+    nameEn: 'Superbike Racing Courier Driver Companion App',
     repo: 'mohamedhgas4444/eldeeb-delivery-agent',
     branch: 'main',
     category: 'دليفري وشحن',
@@ -283,26 +285,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   onBroadcastNotification,
   onBackToStore,
 }) => {
-  // Manager authentication is verified through the centralized hashed PIN checker.
+  // STRICT AUTHENTICATION - STRICT PASSWORD: MOhager191995 (ABSOLUTELY ZERO HINTS)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('eldeeb_hub_auth') === 'true';
   });
   const [pin, setPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [authNotice, setAuthNotice] = useState('');
-
-  useEffect(() => {
-    getManagerSession().then((allowed) => setIsAuthenticated(allowed));
-    return watchManagerSession((allowed) => {
-      setIsAuthenticated(allowed);
-      if (allowed) setAuthNotice('تم تسجيل دخول المدير بنجاح.');
-    });
-  }, []);
 
   // Active Hub Navigation Tab
-  const [activeTab, setActiveTab] = useState<'github' | 'products' | 'broadcast' | 'customers' | 'drive'>('github');
+  const [activeTab, setActiveTab] = useState<'github' | 'products' | 'broadcast' | 'customers' | 'drive' | 'branding'>('github');
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+  const [portalLogo, setPortalLogo] = useState<string>(() => getStoredLogo() || '/eldeeb_pharmacy_logo.jpg');
+  const [portalLogoSuccess, setPortalLogoSuccess] = useState(false);
 
   // GitHub Connected Apps State
   const [githubApps, setGithubApps] = useState<GitHubAppItem[]>(() => {
@@ -349,7 +344,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [requiresPrescription, setRequiresPrescription] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState('');
-  const [isSavingProduct, setIsSavingProduct] = useState(false);
 
   // Push Broadcast Notification Form
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -372,25 +366,25 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     }
   };
 
-  // Request a one-time manager login link; no password is stored in the frontend.
-  const handleLogin = async (e: React.FormEvent) => {
+  // Login handler strictly against MOhager191995 with ZERO hints!
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await signInManagerWithGoogle();
-    if (result.success) {
-      setAuthError('');
-      setAuthNotice(`سيتم تحويلك إلى Google. يجب استخدام الحساب ${MANAGER_EMAIL}`);
-    } else setAuthError(result.error || 'تعذر تشغيل تسجيل الدخول عبر Google. فعّل Google Provider في Supabase.');
-  };
+    const MASTER_PASSWORD = 'MOhager191995';
 
-  const handleMagicLink = async () => {
-    const result = await requestManagerMagicLink();
-    if (result.success) setAuthNotice(`تم إرسال رابط دخول آمن إلى ${MANAGER_EMAIL}`);
-    else setAuthError(result.error || 'تعذر إرسال رابط الدخول.');
+    if (pin.trim() === MASTER_PASSWORD) {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('eldeeb_hub_auth', 'true');
+      setAuthError('');
+      setPin('');
+    } else {
+      // Strictly no hints given!
+      setAuthError('رمز الدخول غير صحيح.');
+    }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    signOutManager();
+    sessionStorage.removeItem('eldeeb_hub_auth');
   };
 
   // Open Real-Time Live Editor for an app
@@ -500,9 +494,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   };
 
   // Product Save / Edit Handler
-  const handleSaveProduct = async (e: React.FormEvent) => {
+  const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSavingProduct) return;
     if (!nameAr.trim() || !price) {
       alert('يرجى ملء اسم الصنف والسعر');
       return;
@@ -537,13 +530,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         isComingSoon,
       };
 
-      setIsSavingProduct(true);
-      const result = await onUpdateProduct(updated);
-      setIsSavingProduct(false);
-      if (!result.success || !result.isOnline) {
-        alert(result.error || 'تم الحفظ محلياً فقط. تعذر مزامنة المنتج مع السحابة.');
-        return;
-      }
+      onUpdateProduct(updated);
+      syncAddProductToFirestore(updated);
       resetProductForm();
       alert(`تم حفظ تعديل ${updated.nameAr} بنجاح!`);
     } else {
@@ -567,13 +555,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         isComingSoon,
       };
 
-      setIsSavingProduct(true);
-      const result = await onAddProduct(newProd);
-      setIsSavingProduct(false);
-      if (!result.success || !result.isOnline) {
-        alert(result.error || 'تم الحفظ محلياً فقط. تعذر مزامنة المنتج مع السحابة.');
-        return;
-      }
+      onAddProduct(newProd);
+      syncAddProductToFirestore(newProd);
       resetProductForm();
       alert(`تمت إضافة ${newProd.nameAr} بنجاح للكتالوج!`);
     }
@@ -734,7 +717,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
       {/* Main Content Area */}
       {!isAuthenticated ? (
-        /* Isolated manager login gate */
+        /* Isolated Login Gate - ZERO HINTS - STRICT PASSWORD: MOhager191995 */
         <div className="flex-1 flex items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.94 }}
@@ -759,12 +742,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
             )}
 
-            {authNotice && (
-              <div className="p-3 bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 text-xs rounded-xl">
-                {authNotice}
-              </div>
-            )}
-
             {/* Form with AUTOCOMPLETE STRICTLY DISABLED TO PREVENT BROWSER SUGGESTIONS */}
             <form
               onSubmit={handleLogin}
@@ -774,23 +751,22 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             >
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                    تسجيل دخول المدير الآمن
+                  رمز الدخول السري
                 </label>
                 <div className="relative">
                   <input
                     id="admin-portal-secure-pin"
-                    type="email"
-                    name="manager_email"
-                    autoComplete="email"
+                    type={showPassword ? 'text' : 'password'}
+                    name="admin_secret_key_field"
+                    autoComplete="new-password"
                     data-lpignore="true"
                     data-form-type="other"
                     spellCheck={false}
                     autoCorrect="off"
                     autoCapitalize="none"
-                    value={MANAGER_EMAIL}
-                    readOnly
+                    value={pin}
                     onChange={(e) => setPin(e.target.value)}
-                    placeholder={MANAGER_EMAIL}
+                    placeholder="••••••••"
                     className="w-full pr-4 pl-11 py-3 bg-slate-800 text-white rounded-2xl text-center text-lg tracking-widest font-mono outline-none border border-slate-700 focus:border-cyan-500 transition-colors shadow-inner"
                     autoFocus
                   />
@@ -809,14 +785,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 type="submit"
                 className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-cyan-500/20 transition-all active:scale-98"
               >
-                الدخول باستخدام Google بأمان
-              </button>
-              <button
-                type="button"
-                onClick={handleMagicLink}
-                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl font-bold text-xs transition-all"
-              >
-                أو إرسال رابط دخول إلى البريد
+                تأكيد الدخول للمنظومة
               </button>
             </form>
           </motion.div>
@@ -884,6 +853,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             >
               <HardDrive className="w-4 h-4" />
               <span>Google Drive والنسخ السحابي</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('branding')}
+              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+                activeTab === 'branding'
+                  ? 'bg-cyan-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span>هوية وشعار الصيدلية (Branding)</span>
             </button>
           </div>
 
@@ -1558,6 +1539,132 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
             </div>
           )}
+
+          {/* ================= TAB 6: BRANDING & LOGO CLOUD SYNC ================= */}
+          {activeTab === 'branding' && (
+            <div className="space-y-6">
+              {/* Header card */}
+              <div className="p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-sky-950/40 border border-slate-800 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <ImageIcon className="w-5 h-5 text-cyan-400" />
+                    <h2 className="text-lg font-bold text-white">إدارة الهوية البصرية وشعار صيدلية الديب</h2>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    عند رفع وتحديث اللوجو هنا، يتم حفظه محلياً ومزامنته سحابياً مع قاعدة بيانات Firebase Firestore ليظهر فورياً لجميع العملاء والمتصفحين على مختلف الأجهزة.
+                  </p>
+                </div>
+              </div>
+
+              {/* Logo Management Box */}
+              <div className="p-6 bg-slate-900/90 border border-slate-800 rounded-3xl space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                  {/* Preview Cards */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-slate-300">
+                      معاينة الشعار الحالي (على الخلفية الفاتحة والداكنة):
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-4 bg-white rounded-2xl border border-slate-200 flex flex-col items-center justify-center gap-2 text-center">
+                        <span className="text-[10px] font-bold text-slate-500">خلفية فاتحة (Light Mode)</span>
+                        <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-md p-1 bg-gradient-to-tr from-sky-600 to-blue-700">
+                          <img
+                            src={portalLogo}
+                            alt="Logo Light Preview"
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover rounded-xl bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex flex-col items-center justify-center gap-2 text-center">
+                        <span className="text-[10px] font-bold text-slate-400">خلفية داكنة (Dark Mode)</span>
+                        <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-md p-1 bg-gradient-to-tr from-sky-600 to-blue-700">
+                          <img
+                            src={portalLogo}
+                            alt="Logo Dark Preview"
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover rounded-xl bg-slate-900"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Upload Controls */}
+                  <div className="space-y-4">
+                    <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-3xl cursor-pointer bg-slate-950/40 hover:bg-cyan-950/20 transition-all text-center">
+                      <Upload className="w-8 h-8 text-cyan-400 mb-2" />
+                      <span className="font-bold text-sm text-white mb-1">
+                        انقر لرفع وتحديث شعار الصيدلية
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        يدعم JPG أو PNG أو WebP (يتم ضغطه وتحسينه تلقائياً لسرعة فائقة)
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            try {
+                              const optimized = await optimizeProductImage(file, 512, 512, 0.85);
+                              const logoData = optimized.dataUrl;
+                              setPortalLogo(logoData);
+                              saveStoredLogo(logoData);
+                              await syncSaveLogoToFirestore(logoData);
+                              setPortalLogoSuccess(true);
+                              setTimeout(() => setPortalLogoSuccess(false), 4000);
+                            } catch (err) {
+                              console.error('Logo upload error:', err);
+                              const reader = new FileReader();
+                              reader.onload = async (event) => {
+                                const res = event.target?.result as string;
+                                if (res) {
+                                  setPortalLogo(res);
+                                  saveStoredLogo(res);
+                                  await syncSaveLogoToFirestore(res);
+                                  setPortalLogoSuccess(true);
+                                  setTimeout(() => setPortalLogoSuccess(false), 4000);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }
+                        }}
+                      />
+                    </label>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const defaultUrl = '/eldeeb_pharmacy_logo.jpg';
+                          setPortalLogo(defaultUrl);
+                          saveStoredLogo(null);
+                          await syncSaveLogoToFirestore(null);
+                          setPortalLogoSuccess(true);
+                          setTimeout(() => setPortalLogoSuccess(false), 4000);
+                        }}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>استعادة الشعار الرسمي الافتراضي</span>
+                      </button>
+
+                      {portalLogoSuccess && (
+                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 animate-in fade-in duration-200">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span>تم الحفظ والمزامنة لجميع العملاء سحابياً!</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1731,7 +1838,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             }
                             className="rounded text-cyan-600"
                           />
-                          <span>أنيميشن كابتن دليفري الفيزبا 🛵</span>
+                          <span>أنيميشن موتوسيكل السباق وصيدلية الديب 🏍️💨</span>
                         </label>
 
                         <label className="flex items-center gap-2 cursor-pointer">

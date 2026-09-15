@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getStoredLogo } from '../services/storage';
-import { fetchSharedLogo } from '../services/siteSettings';
+import { getStoredLogo, saveStoredLogo } from '../services/storage';
+import { subscribeToFirestoreLogo } from '../services/firestoreSync';
 
 interface LogoProps {
   className?: string;
@@ -14,25 +14,54 @@ export const Logo: React.FC<LogoProps> = ({
   showSubtitle = true,
 }) => {
   const [logoSrc, setLogoSrc] = useState<string>(() => {
-    return getStoredLogo() || '/eldeeb_pharmacy_logo.jpg?v=2';
+    return getStoredLogo() || '/eldeeb_pharmacy_logo.jpg';
   });
-  const [imageError, setImageError] = useState(false);
+  const [fallbackIndex, setFallbackIndex] = useState(0);
+
+  const fallbackList = ['/eldeeb_pharmacy_logo.jpg', '/eldeeb_logo.jpg'];
 
   useEffect(() => {
+    // 1. Listen for local logo updates
     const handleLogoUpdated = () => {
       const stored = getStoredLogo();
-      setLogoSrc(stored || '/eldeeb_pharmacy_logo.jpg?v=2');
-      setImageError(false);
+      setLogoSrc(stored || '/eldeeb_pharmacy_logo.jpg');
+      setFallbackIndex(0);
     };
 
     window.addEventListener('eldeeb_logo_updated', handleLogoUpdated);
-    fetchSharedLogo().then((sharedLogo) => {
-      if (sharedLogo) setLogoSrc(sharedLogo);
+
+    // 2. Real-time subscription to cloud Firestore logo (ensures all clients & devices get the manager's logo)
+    const unsubscribe = subscribeToFirestoreLogo((cloudLogoUrl) => {
+      if (cloudLogoUrl) {
+        setLogoSrc(cloudLogoUrl);
+        // Cache locally for instant next load
+        saveStoredLogo(cloudLogoUrl);
+        setFallbackIndex(0);
+      } else {
+        const stored = getStoredLogo();
+        if (!stored) {
+          setLogoSrc('/eldeeb_pharmacy_logo.jpg');
+          setFallbackIndex(0);
+        }
+      }
     });
+
     return () => {
       window.removeEventListener('eldeeb_logo_updated', handleLogoUpdated);
+      unsubscribe();
     };
   }, []);
+
+  const handleImageError = () => {
+    if (fallbackIndex < fallbackList.length) {
+      const nextFallback = fallbackList[fallbackIndex];
+      setFallbackIndex((prev) => prev + 1);
+      setLogoSrc(nextFallback);
+    } else {
+      // Out of fallbacks, show SVG
+      setFallbackIndex(99);
+    }
+  };
 
   const sizeClasses = {
     sm: 'w-10 h-10',
@@ -44,12 +73,12 @@ export const Logo: React.FC<LogoProps> = ({
     <div className={`flex items-center gap-2.5 select-none ${className}`} id="eldeeb-logo-container">
       {/* Visual Logo Emblem */}
       <div className={`relative ${sizeClasses[size]} shrink-0 rounded-2xl overflow-hidden p-0.5 shadow-md bg-gradient-to-tr from-sky-600 via-cyan-500 to-blue-700 transition-transform hover:scale-105 duration-300`}>
-        {!imageError ? (
+        {fallbackIndex < 99 ? (
           <img
             src={logoSrc}
             alt="شعار صيدلية الديب"
             referrerPolicy="no-referrer"
-            onError={() => setImageError(true)}
+            onError={handleImageError}
             className="w-full h-full object-cover rounded-[14px] bg-white dark:bg-slate-900"
           />
         ) : (
@@ -102,3 +131,5 @@ export const Logo: React.FC<LogoProps> = ({
     </div>
   );
 };
+
+
