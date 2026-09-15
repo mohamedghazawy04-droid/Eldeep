@@ -30,6 +30,30 @@ const CUSTOMERS_COL = 'customers';
 const NOTIFICATIONS_COL = 'notifications';
 
 /**
+ * Recursively sanitizes objects before saving to Firestore.
+ * Strips all keys whose values are `undefined` to prevent Firestore
+ * "Unsupported field value: undefined" errors.
+ */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as any;
+  }
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeForFirestore(item)) as any;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const clean: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        clean[key] = sanitizeForFirestore(value);
+      }
+    }
+    return clean as any;
+  }
+  return data;
+}
+
+/**
  * Initialize and subscribe to real-time Products in Firestore
  */
 export function subscribeToFirestoreProducts(
@@ -45,23 +69,28 @@ export function subscribeToFirestoreProducts(
       async (snapshot) => {
         if (snapshot.empty) {
           const stored = getStoredProducts();
-          const itemsToKeep = stored.length > 0 ? stored : INITIAL_PRODUCTS;
-          onUpdate(itemsToKeep);
-          saveProducts(itemsToKeep);
+          if (stored && stored.length > 0) {
+            onUpdate(stored);
+            syncBatchUploadProductsToFirestore(stored).catch(() => {});
+          }
           return;
         }
 
         const items: Product[] = [];
         snapshot.forEach((docSnap) => {
-          items.push(docSnap.data() as Product);
+          const d = docSnap.data();
+          if (d && d.id && d.nameAr) {
+            items.push(d as Product);
+          }
         });
 
-        // Keep local cache up to date
-        saveProducts(items);
-        onUpdate(items);
+        if (items.length > 0) {
+          saveProducts(items);
+          onUpdate(items);
+        }
       },
       (error) => {
-        // When backend is temporarily unreachable or offline, keep cached/local products intact
+        console.warn('Firestore products listener notification:', error);
         const stored = getStoredProducts();
         if (stored.length > 0) {
           onUpdate(stored);
@@ -86,7 +115,8 @@ export async function syncAddProductToFirestore(
     return { success: true, isOnline: false };
   }
   try {
-    await setDoc(doc(db, PRODUCTS_COL, product.id), product, { merge: true });
+    const cleanProduct = sanitizeForFirestore(product);
+    await setDoc(doc(db, PRODUCTS_COL, product.id), cleanProduct, { merge: true });
     return { success: true, isOnline: true };
   } catch (err: any) {
     console.error('Failed to save product to Firestore:', err);
@@ -112,7 +142,8 @@ export async function syncBatchUploadProductsToFirestore(
   let count = 0;
   try {
     for (const product of products) {
-      await setDoc(doc(db, PRODUCTS_COL, product.id), product, { merge: true });
+      const cleanProduct = sanitizeForFirestore(product);
+      await setDoc(doc(db, PRODUCTS_COL, product.id), cleanProduct, { merge: true });
       count++;
     }
     return { successCount: count };
@@ -232,10 +263,11 @@ export async function syncSaveOrderToFirestore(order: OrderRecord): Promise<void
   saveOrder(order);
   if (!isFirebaseReady) return;
   try {
-    await setDoc(doc(db, ORDERS_COL, order.id), {
+    const cleanOrder = sanitizeForFirestore({
       ...order,
       createdAt: Date.now(),
     });
+    await setDoc(doc(db, ORDERS_COL, order.id), cleanOrder);
   } catch (err) {
     console.error('Failed to save order to Firestore:', err);
   }
@@ -276,10 +308,11 @@ export async function syncSavePrescriptionToFirestore(rx: PrescriptionOrder): Pr
   savePrescription(rx);
   if (!isFirebaseReady) return;
   try {
-    await setDoc(doc(db, PRESCRIPTIONS_COL, rx.id), {
+    const cleanRx = sanitizeForFirestore({
       ...rx,
       createdAt: Date.now(),
     });
+    await setDoc(doc(db, PRESCRIPTIONS_COL, rx.id), cleanRx);
   } catch (err) {
     console.error('Failed to save prescription to Firestore:', err);
   }
@@ -325,18 +358,23 @@ export async function syncSaveCustomerToFirestore(
   }
   try {
     const docId = customer.phone.replace(/[^\d+]/g, '') || customer.id;
+    const cleanCustomer = sanitizeForFirestore({
+      ...customer,
+      docId,
+      updatedAt: Date.now(),
+      registeredOnline: true,
+    });
     await setDoc(
       doc(db, CUSTOMERS_COL, docId),
-      {
-        ...customer,
-        docId,
-        updatedAt: Date.now(),
-        registeredOnline: true,
-      },
+      cleanCustomer,
       { merge: true }
     );
     return { success: true, isOnline: true };
   } catch (err: any) {
+    console.error('Failed to save customer to Firestore:', err);
+    return { success: false, isOnline: false, error: err?.message || 'خطأ في الحفظ السحابي' };
+  }
+}
     console.error('Failed to save customer to Firestore:', err);
     return { success: false, isOnline: false, error: err?.message || 'خطأ في الحفظ السحابي' };
   }
