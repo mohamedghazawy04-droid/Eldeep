@@ -109,8 +109,17 @@ export default function App() {
 
   useEffect(() => {
     const handleHashChange = () => {
+      const urlParams = new URLSearchParams(window.location.search);
       const h = window.location.hash.toLowerCase();
-      if (h === '#hub' || h === '#admin' || h === '#portal' || h === '#manage') {
+      if (
+        urlParams.get('hub') === 'true' ||
+        urlParams.get('admin') === 'true' ||
+        urlParams.get('manage') === 'true' ||
+        h === '#hub' ||
+        h === '#admin' ||
+        h === '#portal' ||
+        h === '#manage'
+      ) {
         setViewMode('admin');
       } else if (h === '#store' || h === '') {
         setViewMode('store');
