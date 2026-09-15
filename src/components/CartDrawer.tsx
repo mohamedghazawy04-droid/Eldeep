@@ -196,6 +196,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       id: 'ord-' + Date.now(),
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),
+      customerEmail: currentCustomer?.email || undefined,
       customerAddress: customerAddress.trim(),
       items: items.map((i) => ({
         productName: i.product.nameAr,

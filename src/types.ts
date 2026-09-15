@@ -77,6 +77,7 @@ export interface OrderRecord {
   id: string;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
   customerAddress: string;
   items: { productName: string; quantity: number; price: number }[];
   totalPrice: number;

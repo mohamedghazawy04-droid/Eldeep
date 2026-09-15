@@ -18,6 +18,7 @@ import { Product, ProductCategory, CartItem, Customer, AppNotification } from '.
 import { CATEGORIES } from './data/initialData';
 import {
   getStoredProducts,
+  loadProductsFromIndexedDb,
   saveProducts,
   getStoredCustomer,
   getStoredNotifications,
@@ -196,6 +197,15 @@ export default function App() {
     };
   }, []);
 
+  // Hydrate products catalog from IndexedDB if initial state is empty
+  useEffect(() => {
+    loadProductsFromIndexedDb().then((idbProducts) => {
+      if (idbProducts && idbProducts.length > 0) {
+        setProducts((current) => (current.length === 0 ? idbProducts : current));
+      }
+    });
+  }, []);
+
   // Shared Supabase catalog: all visitors receive the same products in realtime.
   useEffect(() => {
     return subscribeToSupabaseProducts((updatedProducts) => {
@@ -214,7 +224,7 @@ export default function App() {
     try {
       localStorage.setItem('eldeeb_cart_items', JSON.stringify(cartItems));
     } catch (e) {
-      console.error(e);
+      console.warn('Could not persist cart items to localStorage', e);
     }
   }, [cartItems]);
 

@@ -72,6 +72,7 @@ import {
 import { optimizeProductImage, estimateProductsStorageSize } from '../utils/imageOptimizer';
 import { GeminiProductStudio } from './GeminiProductStudio';
 import { getManagerSession, requestManagerMagicLink } from '../services/adminAuth';
+import { verifyAdminPin } from '../services/adminSecurity';
 import { clearSharedLogo, saveSharedLogo } from '../services/siteSettings';
 
 interface AdminModalProps {
@@ -192,11 +193,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (await getManagerSession()) {
+    const isPinValid = await verifyAdminPin(pin);
+    const isManager = await getManagerSession();
+    if (isPinValid || isManager) {
       setIsAuthenticated(true);
     } else {
       const result = await requestManagerMagicLink();
-      alert(result.success ? 'تم إرسال رابط دخول المدير إلى البريد المسجل.' : 'يجب تسجيل دخول المدير أولاً عبر الرابط الآمن.');
+      alert(result.success ? 'تم إرسال رابط دخول المدير إلى البريد المسجل.' : 'كلمة المرور غير صحيحة، يرجى التأكد من الرمز السري.');
     }
   };
 

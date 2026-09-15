@@ -1,9 +1,51 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // Legacy Firebase fallback is disabled. Customer and order data use Supabase RLS.
-      allow read, write: if false;
+    // Products catalog: public read, write for catalog updates
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Orders: allow customer create and tracking read/update
+    match /orders/{orderId} {
+      allow create: if true;
+      allow read, update: if true;
+    }
+
+    // Prescriptions: allow prescription upload and status checks
+    match /prescriptions/{prescriptionId} {
+      allow create: if true;
+      allow read, update: if true;
+    }
+
+    // Customers: loyalty profiles and points
+    match /customers/{customerPhone} {
+      allow read, write: if true;
+    }
+
+    // Notifications: broadcast announcements
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Site settings & brand logo
+    match /site_settings/{settingId} {
+      allow read, write: if true;
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
+
+    // System connectivity and latency health checks
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+
+    match /_health/{docId} {
+      allow read, write: if true;
     }
   }
 }

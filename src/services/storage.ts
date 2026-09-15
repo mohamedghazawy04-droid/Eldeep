@@ -1,5 +1,6 @@
 import { AppNotification, Customer, LoyaltyTier, OrderRecord, PrescriptionOrder, Product } from '../types';
 import { INITIAL_NOTIFICATIONS, INITIAL_PRODUCTS } from '../data/initialData';
+import { getIdbItem, setIdbItem, removeIdbItem } from './indexedDb';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'eldeeb_pharmacy_products_v1',
@@ -14,6 +15,9 @@ const STORAGE_KEYS = {
   CUSTOM_LOGO: 'eldeeb_pharmacy_custom_logo_v1',
 };
 
+// In-memory cache for ultra-fast access and safeguarding against quota limits
+let memoryProductsCache: Product[] | null = null;
+
 export function recalculateProductLoyaltyPoints(price: number): number {
   if (!price || price <= 0) return 0;
   const pts = price / 100;
@@ -27,34 +31,113 @@ export function ensureProductLoyaltySystem(products: Product[]): Product[] {
   }));
 }
 
+/**
+ * Safely persists products to localStorage with intelligent quota handling:
+ * 1. Tries saving full products
+ * 2. If quota exceeded, sanitizes large base64 data URLs (>2KB) for localStorage copy
+ * 3. If still exceeded, trims to essential items
+ * 4. Never throws unhandled quota error or logs fatal console.error
+ */
+function saveProductsToLocalStorage(products: Product[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+    return;
+  } catch {
+    // Quota exceeded: try sanitized copy (remove large data: URLs from localStorage)
+  }
+
+  try {
+    const sanitized = products.map((p) => {
+      if (p.image && p.image.startsWith('data:') && p.image.length > 2048) {
+        return { ...p, image: '/eldeeb_logo.jpg' };
+      }
+      return p;
+    });
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(sanitized));
+    return;
+  } catch {
+    // Still quota exceeded: trim to top 35 products
+  }
+
+  try {
+    const trimmed = products.slice(0, 35).map((p) => ({
+      ...p,
+      image: p.image && p.image.length < 2048 ? p.image : '/eldeeb_logo.jpg',
+    }));
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(trimmed));
+    return;
+  } catch {
+    // LocalStorage is completely full: silently remove key so it won't leave corrupt data
+  }
+
+  try {
+    localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
+  } catch {
+    // Ignore
+  }
+}
+
 export function getStoredProducts(): Product[] {
+  // 1. Check in-memory cache first
+  if (memoryProductsCache && memoryProductsCache.length > 0) {
+    return memoryProductsCache;
+  }
+
+  // 2. Read from localStorage
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
     if (saved) {
       const parsed: Product[] = JSON.parse(saved);
-      return ensureProductLoyaltySystem(parsed);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const calibrated = ensureProductLoyaltySystem(parsed);
+        memoryProductsCache = calibrated;
+        return calibrated;
+      }
     }
-  } catch (e) {
-    console.error('Failed to load products from storage', e);
+  } catch {
+    // Ignore parse or read error
   }
+
   return [];
 }
 
-export function clearAllProducts(): void {
+/**
+ * Asynchronously loads products from IndexedDB (no 5MB quota limit)
+ */
+export async function loadProductsFromIndexedDb(): Promise<Product[] | null> {
   try {
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify([]));
-  } catch (e) {
-    console.error('Failed to clear products', e);
+    const idbProducts = await getIdbItem<Product[]>(STORAGE_KEYS.PRODUCTS);
+    if (idbProducts && Array.isArray(idbProducts) && idbProducts.length > 0) {
+      const calibrated = ensureProductLoyaltySystem(idbProducts);
+      memoryProductsCache = calibrated;
+      return calibrated;
+    }
+  } catch {
+    // Ignore
   }
+  return null;
+}
+
+export function clearAllProducts(): void {
+  memoryProductsCache = [];
+  try {
+    localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
+  } catch {
+    // Ignore
+  }
+  removeIdbItem(STORAGE_KEYS.PRODUCTS).catch(() => {});
 }
 
 export function saveProducts(products: Product[]): void {
-  try {
-    const calibrated = ensureProductLoyaltySystem(products);
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(calibrated));
-  } catch (e) {
-    console.error('Failed to save products', e);
-  }
+  const calibrated = ensureProductLoyaltySystem(products);
+  // 1. In-memory cache
+  memoryProductsCache = calibrated;
+
+  // 2. IndexedDB (stores complete catalog including full-resolution images)
+  setIdbItem(STORAGE_KEYS.PRODUCTS, calibrated).catch(() => {});
+
+  // 3. Resilient localStorage fallback
+  saveProductsToLocalStorage(calibrated);
 }
 
 export function calculateTier(points: number): LoyaltyTier {
@@ -82,7 +165,11 @@ export function getStoredCustomer(): Customer | null {
 export function saveCustomer(customer: Customer): void {
   try {
     customer.tier = calculateTier(customer.points);
-    localStorage.setItem(STORAGE_KEYS.CUSTOMER, JSON.stringify(customer));
+    try {
+      localStorage.setItem(STORAGE_KEYS.CUSTOMER, JSON.stringify(customer));
+    } catch {
+      // Ignore quota error for customer session
+    }
 
     // Also update in all customers directory with strict loyalty points protection
     const all = getStoredAllCustomers();
@@ -107,9 +194,13 @@ export function saveCustomer(customer: Customer): void {
     } else {
       all.unshift(customer);
     }
-    localStorage.setItem(STORAGE_KEYS.ALL_CUSTOMERS, JSON.stringify(all));
+    try {
+      localStorage.setItem(STORAGE_KEYS.ALL_CUSTOMERS, JSON.stringify(all));
+    } catch {
+      // Ignore quota error
+    }
   } catch (e) {
-    console.error('Failed to save customer', e);
+    console.warn('Failed to save customer', e);
   }
 }
 
@@ -121,7 +212,7 @@ export function saveAllCustomers(customers: Customer[]): void {
     }));
     localStorage.setItem(STORAGE_KEYS.ALL_CUSTOMERS, JSON.stringify(calibrated));
   } catch (e) {
-    console.error('Failed to save all customers', e);
+    console.warn('Failed to save all customers', e);
   }
 }
 
@@ -137,7 +228,7 @@ export function deleteStoredCustomer(customerId: string): Customer[] {
     }
     return all;
   } catch (e) {
-    console.error('Failed to delete customer', e);
+    console.warn('Failed to delete customer', e);
     return getStoredAllCustomers();
   }
 }
@@ -164,11 +255,15 @@ export function updateStoredCustomerPoints(customerId: string, newPoints: number
         points: Math.max(0, newPoints),
         tier: calculateTier(Math.max(0, newPoints)),
       };
-      localStorage.setItem(STORAGE_KEYS.CUSTOMER, JSON.stringify(updatedActive));
+      try {
+        localStorage.setItem(STORAGE_KEYS.CUSTOMER, JSON.stringify(updatedActive));
+      } catch {
+        // Ignore quota error
+      }
     }
     return all;
   } catch (e) {
-    console.error('Failed to update customer points', e);
+    console.warn('Failed to update customer points', e);
     return getStoredAllCustomers();
   }
 }
@@ -242,9 +337,10 @@ export function saveOrder(order: OrderRecord): void {
   try {
     const orders = getStoredOrders();
     orders.unshift(order);
-    localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
+    const trimmed = orders.slice(0, 100);
+    localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(trimmed));
   } catch (e) {
-    console.error('Failed to save order', e);
+    console.warn('Failed to save order to localStorage', e);
   }
 }
 
@@ -255,7 +351,7 @@ export function getStoredPrescriptions(): PrescriptionOrder[] {
       return JSON.parse(saved);
     }
   } catch (e) {
-    console.error('Failed to load prescriptions', e);
+    console.warn('Failed to load prescriptions', e);
   }
   return [];
 }
@@ -264,9 +360,16 @@ export function savePrescription(prescription: PrescriptionOrder): void {
   try {
     const list = getStoredPrescriptions();
     list.unshift(prescription);
-    localStorage.setItem(STORAGE_KEYS.PRESCRIPTIONS, JSON.stringify(list));
+    const trimmed = list.slice(0, 15);
+    try {
+      localStorage.setItem(STORAGE_KEYS.PRESCRIPTIONS, JSON.stringify(trimmed));
+    } catch {
+      // If quota exceeded due to image, strip imageUrl from older items
+      const lightweight = trimmed.map((item, idx) => (idx === 0 ? item : { ...item, imageUrl: '' }));
+      localStorage.setItem(STORAGE_KEYS.PRESCRIPTIONS, JSON.stringify(lightweight));
+    }
   } catch (e) {
-    console.error('Failed to save prescription', e);
+    console.warn('Failed to save prescription', e);
   }
 }
 
@@ -277,7 +380,7 @@ export function updatePrescriptionStatus(id: string, status: PrescriptionOrder['
     );
     localStorage.setItem(STORAGE_KEYS.PRESCRIPTIONS, JSON.stringify(list));
   } catch (e) {
-    console.error('Failed to update prescription', e);
+    console.warn('Failed to update prescription', e);
   }
 }
 
@@ -288,16 +391,17 @@ export function getStoredNotifications(): AppNotification[] {
       return JSON.parse(saved);
     }
   } catch (e) {
-    console.error('Failed to load notifications', e);
+    console.warn('Failed to load notifications', e);
   }
   return INITIAL_NOTIFICATIONS;
 }
 
 export function saveNotifications(notifications: AppNotification[]): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+    const trimmed = notifications.slice(0, 50);
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(trimmed));
   } catch (e) {
-    console.error('Failed to save notifications', e);
+    console.warn('Failed to save notifications', e);
   }
 }
 
@@ -340,7 +444,7 @@ export function saveTheme(theme: 'light' | 'dark'): void {
       document.documentElement.classList.remove('dark');
     }
   } catch (e) {
-    console.error('Failed to save theme', e);
+    console.warn('Failed to save theme', e);
   }
 }
 
@@ -391,8 +495,14 @@ export function saveStoredLogo(logoUrl: string | null): void {
   try {
     if (!logoUrl) {
       localStorage.removeItem(STORAGE_KEYS.CUSTOM_LOGO);
+      removeIdbItem(STORAGE_KEYS.CUSTOM_LOGO).catch(() => {});
     } else {
-      localStorage.setItem(STORAGE_KEYS.CUSTOM_LOGO, logoUrl);
+      setIdbItem(STORAGE_KEYS.CUSTOM_LOGO, logoUrl).catch(() => {});
+      try {
+        localStorage.setItem(STORAGE_KEYS.CUSTOM_LOGO, logoUrl);
+      } catch {
+        // Safe fallback: logo saved to IndexedDB, quota exceeded in localStorage
+      }
     }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('eldeeb_logo_updated'));
@@ -407,7 +517,7 @@ export function saveStoredLogo(logoUrl: string | null): void {
       }
     }
   } catch (e) {
-    console.error('Failed to save logo', e);
+    console.warn('Failed to save logo', e);
   }
 }
 

@@ -362,7 +362,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     try {
       localStorage.setItem('eldeeb_github_apps_v2', JSON.stringify(apps));
     } catch (e) {
-      console.error(e);
+      console.warn('Could not save GitHub apps to localStorage', e);
     }
   };
 
