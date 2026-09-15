@@ -8,7 +8,11 @@ export const supabasePublishableKey =
   'sb_publishable_WECN_9hIlPR5_rmawGajKw_CWc_mvzc';
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
-  auth: { persistSession: false },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
   realtime: { params: { eventsPerSecond: 10 } },
 });
 
