@@ -36,6 +36,8 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
   const [contrast, setContrast] = useState<number>(112); // 100 is default
   const [addBadge, setAddBadge] = useState<boolean>(true);
   const [addShadow, setAddShadow] = useState<boolean>(true);
+  const [smartCrop, setSmartCrop] = useState<boolean>(true);
+  const [smartLight, setSmartLight] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   // Camera stream state
@@ -131,7 +133,7 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
     if (sourceImage && !isCameraActive) {
       applyStudioEffects(sourceImage, activePreset, brightness, contrast, addBadge, addShadow);
     }
-  }, [sourceImage, activePreset, brightness, contrast, addBadge, addShadow, isCameraActive]);
+  }, [sourceImage, activePreset, brightness, contrast, addBadge, addShadow, smartCrop, smartLight, isCameraActive]);
 
   const applyStudioEffects = (
     imgSrc: string,
@@ -208,12 +210,62 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
         ctx.fillRect(0, 0, outW, outH);
       }
 
-      // --- 2. Calculate aspect-fitted product position ---
+      // --- 2. Smart product framing: detect the foreground bounds against the corner background ---
+      let sourceX = 0;
+      let sourceY = 0;
+      let sourceW = img.width;
+      let sourceH = img.height;
+      if (smartCrop && img.width > 20 && img.height > 20) {
+        const probe = document.createElement('canvas');
+        const scale = Math.min(1, 900 / Math.max(img.width, img.height));
+        probe.width = Math.max(1, Math.round(img.width * scale));
+        probe.height = Math.max(1, Math.round(img.height * scale));
+        const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+        if (probeCtx) {
+          probeCtx.drawImage(img, 0, 0, probe.width, probe.height);
+          const pixels = probeCtx.getImageData(0, 0, probe.width, probe.height).data;
+          const sample = (x: number, y: number) => {
+            const i = (y * probe.width + x) * 4;
+            return [pixels[i], pixels[i + 1], pixels[i + 2]];
+          };
+          const corners = [sample(2, 2), sample(probe.width - 3, 2), sample(2, probe.height - 3), sample(probe.width - 3, probe.height - 3)];
+          const bg = corners[0].map((_, channel) => corners.reduce((sum, color) => sum + color[channel], 0) / corners.length);
+          let minX = probe.width;
+          let minY = probe.height;
+          let maxX = 0;
+          let maxY = 0;
+          const threshold = 34;
+          for (let y = 0; y < probe.height; y += 6) {
+            for (let x = 0; x < probe.width; x += 6) {
+              const i = (y * probe.width + x) * 4;
+              const distance = Math.abs(pixels[i] - bg[0]) + Math.abs(pixels[i + 1] - bg[1]) + Math.abs(pixels[i + 2] - bg[2]);
+              if (distance > threshold * 3) {
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x);
+                maxY = Math.max(maxY, y);
+              }
+            }
+          }
+          if (maxX > minX && maxY > minY) {
+            const marginX = Math.round((maxX - minX) * 0.12);
+            const marginY = Math.round((maxY - minY) * 0.12);
+            sourceX = Math.max(0, Math.round((minX - marginX) / scale));
+            sourceY = Math.max(0, Math.round((minY - marginY) / scale));
+            const right = Math.min(probe.width, maxX + marginX);
+            const bottom = Math.min(probe.height, maxY + marginY);
+            sourceW = Math.min(img.width - sourceX, Math.round((right - minX + marginX) / scale));
+            sourceH = Math.min(img.height - sourceY, Math.round((bottom - minY + marginY) / scale));
+          }
+        }
+      }
+
+      // --- 3. Calculate aspect-fitted product position ---
       const padding = 70;
       const targetW = outW - padding * 2;
       const targetH = outH - padding * 2 - 30; // space for bottom ground
 
-      const imgAspect = img.width / img.height;
+      const imgAspect = sourceW / sourceH;
       let drawW = targetW;
       let drawH = targetW / imgAspect;
 
@@ -225,7 +277,7 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
       const drawX = (outW - drawW) / 2;
       const drawY = padding + (targetH - drawH) / 2;
 
-      // --- 3. Cast Shadow for 3D realism ---
+      // --- 4. Cast Shadow for 3D realism ---
       if (shadow && preset !== 'original') {
         ctx.save();
         ctx.beginPath();
@@ -249,10 +301,10 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
         ctx.restore();
       }
 
-      // --- 4. Draw Product Image with Filters ---
+      // --- 5. Draw Product Image with Filters ---
       ctx.save();
       // Apply filters
-      let filterString = `brightness(${b}%) contrast(${c}%)`;
+      let filterString = `brightness(${smartLight ? Math.max(b, 104) : b}%) contrast(${smartLight ? Math.max(c, 108) : c}%)`;
       if (preset === 'commercial3d') {
         filterString += ' saturate(115%)';
       } else if (preset === 'goldenGlow') {
@@ -261,10 +313,10 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
       ctx.filter = filterString;
 
       // Draw the image cleanly centered
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, drawX, drawY, drawW, drawH);
       ctx.restore();
 
-      // --- 5. Commercial Promotional Badge ---
+      // --- 6. Commercial Promotional Badge ---
       if (badge && preset !== 'original') {
         ctx.save();
         // Top right promotional stamp
@@ -619,6 +671,30 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
 
               {/* Toggles */}
               <div className="space-y-2">
+                <label className="flex items-center justify-between p-2.5 bg-sky-50 dark:bg-sky-950/30 rounded-xl border border-sky-200 dark:border-sky-900 cursor-pointer text-xs">
+                  <span className="font-bold text-sky-900 dark:text-sky-200">
+                    قص ذكي وتتبع تلقائي للمنتج
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={smartCrop}
+                    onChange={(e) => setSmartCrop(e.target.checked)}
+                    className="w-4 h-4 text-sky-600 rounded"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl border border-indigo-200 dark:border-indigo-900 cursor-pointer text-xs">
+                  <span className="font-bold text-indigo-900 dark:text-indigo-200">
+                    تحسين إضاءة ووضوح ذكي
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={smartLight}
+                    onChange={(e) => setSmartLight(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 rounded"
+                  />
+                </label>
+
                 <label className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer text-xs">
                   <span className="font-bold text-slate-800 dark:text-slate-200">
                     شارة الجودة الدعائية (⭐ صيدلية الديب • أصلي 100%)
