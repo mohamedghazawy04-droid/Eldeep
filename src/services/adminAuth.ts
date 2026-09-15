@@ -17,7 +17,7 @@ export function watchManagerSession(onChange: (allowed: boolean) => void): () =>
 export async function requestManagerMagicLink(): Promise<{ success: boolean; error?: string }> {
   const { error } = await supabase.auth.signInWithOtp({
     email: MANAGER_EMAIL,
-    options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + '/#hub' },
+    options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + '/?hub=true' },
   });
   return error ? { success: false, error: error.message } : { success: true };
 }
@@ -31,7 +31,7 @@ export async function signInManagerWithGoogle(): Promise<{ success: boolean; err
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: window.location.origin + '/#hub',
+      redirectTo: window.location.origin + '/?hub=true',
       queryParams: { prompt: 'select_account' },
     },
   });
