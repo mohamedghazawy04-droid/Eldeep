@@ -22,6 +22,7 @@ import { Customer } from '../types';
 import { DeliveryCaptainAnimation } from './DeliveryCaptainAnimation';
 import { calculateTier, saveCustomer, getStoredAllCustomers } from '../services/storage';
 import { syncSaveCustomerToFirestore, fetchCustomerFromFirestore } from '../services/firestoreSync';
+import { Logo } from './Logo';
 import {
   sendEmailVerificationCode,
   verifyEmailCode,
@@ -87,8 +88,8 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
         if (!address && existing.address) setAddress(existing.address);
         setDetectedAccountMsg(
           existing.isEmailVerified
-            ? `مرحباً بعودتك! بريدك مؤكد بالفعل ولديك (${existing.points} نقطة ولاء)`
-            : `مرحباً بعودتك! لديك حساب مسجل، تابع لتأكيد بريدك الإلكتروني واستلام نقاطك (${existing.points} نقطة)`
+            ? `مرحباً بعودتك! بريدك مؤكد بالفعل ولديك حساب نشط`
+            : `مرحباً بعودتك! لديك حساب مسجل، تابع لتأكيد بريدك الإلكتروني`
         );
         return;
       }
@@ -99,7 +100,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
         if (!name) setName(cloudCust.name);
         if (!phone && cloudCust.phone && !cloudCust.phone.includes('@')) setPhone(cloudCust.phone);
         if (!address && cloudCust.address) setAddress(cloudCust.address);
-        setDetectedAccountMsg(`مرحباً بعودتك! تم العثور على حسابك بالسيرفر السحابي (${cloudCust.points} نقطة ولاء)`);
+        setDetectedAccountMsg(`مرحباً بعودتك! تم العثور على حسابك بالسيرفر السحابي`);
       } else {
         setDetectedAccountMsg(null);
       }
@@ -118,7 +119,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
         if (!name) setName(existing.name);
         if (!email && existing.email) setEmail(existing.email);
         if (!address && existing.address) setAddress(existing.address);
-        setDetectedAccountMsg(`مرحباً بعودتك! تم العثور على رصيدك (${existing.points} نقطة ولاء)`);
+        setDetectedAccountMsg(`مرحباً بعودتك! تم العثور على حسابك المسجل`);
         return;
       }
       const cloudCust = await fetchCustomerFromFirestore(cleanPhone);
@@ -126,7 +127,7 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
         if (!name) setName(cloudCust.name);
         if (!email && cloudCust.email) setEmail(cloudCust.email);
         if (!address && cloudCust.address) setAddress(cloudCust.address);
-        setDetectedAccountMsg(`مرحباً بعودتك! تم العثور على حسابك بالسيرفر السحابي (${cloudCust.points} نقطة ولاء)`);
+        setDetectedAccountMsg(`مرحباً بعودتك! تم العثور على حسابك بالسيرفر السحابي`);
       } else {
         setDetectedAccountMsg(null);
       }
@@ -198,9 +199,8 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
       );
 
       const previousPoints = existing ? existing.points : 0;
-      // Award 50 welcome loyalty points for email verification bonus
-      const bonus = 50;
-      const finalPoints = previousPoints + bonus;
+      // No bonus points on registration - points are earned strictly from completed orders
+      const finalPoints = previousPoints;
 
       const customerToSave: Customer = {
         id: existing?.id || 'cust-' + Date.now(),
@@ -330,11 +330,16 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
         >
           {/* Header Bar */}
           <div className="p-3.5 bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-700 text-white flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              <h3 className="font-extrabold text-sm sm:text-base">
-                صيدلية الديب - {currentStep === 'verify' ? 'تأكيد البريد الإلكتروني' : 'تسجيل حساب جديد'}
-              </h3>
+            <div className="flex items-center gap-2.5">
+              <Logo size="sm" showSubtitle={false} className="text-white" />
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base leading-tight">
+                  صيدلية الديب
+                </h3>
+                <span className="text-[11px] text-sky-100/90 block">
+                  {currentStep === 'verify' ? 'تأكيد البريد وتفعيل الحساب' : 'تسجيل وتفعيل حساب العميل'}
+                </span>
+              </div>
             </div>
             <button
               onClick={handleBrowseAsGuest}
@@ -387,15 +392,14 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
                 {authTab === 'email' && (
                   <div className="p-3 bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-950/40 dark:to-blue-950/40 border border-sky-200 dark:border-sky-800 rounded-2xl flex items-start gap-2.5">
                     <div className="w-8 h-8 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 mt-0.5">
-                      <Award className="w-4 h-4 text-amber-300" />
+                      <ShieldCheck className="w-4 h-4 text-white" />
                     </div>
                     <div className="text-right">
                       <h4 className="text-xs font-bold text-sky-950 dark:text-sky-200 flex items-center gap-1">
-                        <span>تأكيد التسجيل بالبريد + 50 نقطة هدية</span>
-                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        <span>تأكيد وتفعيل الحساب بالبريد الإلكتروني</span>
                       </h4>
                       <p className="text-[11px] text-sky-700 dark:text-sky-400 leading-relaxed mt-0.5">
-                        أدخل بريدك الإلكتروني وسيتم إرسال كود التأكيد (6 أرقام) للتحقق وحفظ حسابك ونقاطك سحابياً.
+                        أدخل بريدك الإلكتروني وسيتم إرسال كود التأكيد (6 أرقام) للتحقق وحفظ حسابك وطلباتك سحابياً.
                       </p>
                     </div>
                   </div>
@@ -674,7 +678,10 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
                     autoFocus
                     value={verificationCode}
                     onChange={(e) => {
-                      setVerificationCode(e.target.value.replace(/[^\d]/g, ''));
+                      const normalized = e.target.value
+                        .replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString())
+                        .replace(/[^\d]/g, '');
+                      setVerificationCode(normalized);
                       setVerifyError('');
                     }}
                     placeholder="••••••"
@@ -685,12 +692,6 @@ export const CustomerWelcomeLoginModal: React.FC<CustomerWelcomeLoginModalProps>
                       {verifyError}
                     </p>
                   )}
-                </div>
-
-                {/* Bonus Reminder */}
-                <div className="p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center justify-center gap-2 text-amber-800 dark:text-amber-300 text-xs font-bold">
-                  <Award className="w-4 h-4 text-amber-500" />
-                  <span>ستحصل فوراً على 50 نقطة ولاء مجانية هدية تأكيد البريد!</span>
                 </div>
 
                 {/* Submit & Actions */}

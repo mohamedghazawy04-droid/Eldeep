@@ -28,6 +28,8 @@ import {
   addBroadcastNotification,
   calculateTier,
   saveCustomer,
+  saveAllCustomers,
+  saveStoredLogo,
   clearAllProducts,
   getStoredOrders,
   getStoredAllCustomers,
@@ -36,6 +38,8 @@ import {
 import {
   subscribeToFirestoreProducts,
   subscribeToFirestoreNotifications,
+  subscribeToFirestoreCustomers,
+  subscribeToFirestoreLogo,
   syncAddProductToFirestore,
   syncDeleteProductFromFirestore,
   syncBroadcastNotificationToFirestore,
@@ -69,6 +73,7 @@ import {
   upsertSupabaseProducts,
 } from './services/supabaseProducts';
 import { upsertSupabaseCustomer } from './services/supabaseCustomers';
+import { triggerDebouncedGitHubAutoSync, restoreFromGitHubBackup } from './services/githubBackup';
 
 export default function App() {
   // State
@@ -85,6 +90,7 @@ export default function App() {
   });
 
   const [activeCustomer, setActiveCustomer] = useState<Customer | null>(getStoredCustomer);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>(getStoredAllCustomers);
   const [notifications, setNotifications] = useState<AppNotification[]>(getStoredNotifications);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => getStoredTheme() === 'dark');
 
@@ -176,12 +182,14 @@ export default function App() {
     saveTheme(isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
-  // Real-time Firestore synchronization
+  // Real-time Firestore synchronization with offline resilience
   useEffect(() => {
+    // 1. Primary real-time subscription from Firestore
     const unsubProducts = subscribeToFirestoreProducts((updatedProducts) => {
-      if (updatedProducts) {
+      if (updatedProducts && updatedProducts.length > 0) {
         setProducts(updatedProducts);
         saveProducts(updatedProducts);
+        upsertSupabaseProducts(updatedProducts).catch(() => {});
       }
     });
 
@@ -191,32 +199,90 @@ export default function App() {
       }
     });
 
+    // 2. Hydrate from IndexedDB if in-memory products are empty
+    loadProductsFromIndexedDb().then((idbProducts) => {
+      if (idbProducts && idbProducts.length > 0) {
+        setProducts((current) => {
+          if (current.length === 0) {
+            syncBatchUploadProductsToFirestore(idbProducts).catch(() => {});
+            return idbProducts;
+          }
+          return current;
+        });
+      }
+    });
+
+    // 3. Fallback sync from Supabase ONLY if catalog is currently empty (prevents wipe-out race conditions)
+    const unsubSupabase = subscribeToSupabaseProducts((supabaseProducts) => {
+      if (supabaseProducts && supabaseProducts.length > 0) {
+        setProducts((current) => {
+          if (current.length === 0) {
+            saveProducts(supabaseProducts);
+            syncBatchUploadProductsToFirestore(supabaseProducts).catch(() => {});
+            return supabaseProducts;
+          }
+          return current;
+        });
+      }
+    });
+
+    // 4. Emergency GitHub Cloud Fallback (if catalog is still empty after cloud and local storage checks)
+    const githubFallbackTimer = setTimeout(() => {
+      setProducts((current) => {
+        if (current.length === 0) {
+          restoreFromGitHubBackup().then((res) => {
+            if (res.success && res.products && res.products.length > 0) {
+              setProducts(res.products);
+              saveProducts(res.products);
+            }
+          }).catch(() => {});
+        }
+        return current;
+      });
+    }, 2500);
+
+    // 5. Live Customer Database synchronization (links all registered customers across devices)
+    const unsubCustomers = subscribeToFirestoreCustomers((cloudCustomers) => {
+      if (cloudCustomers && cloudCustomers.length > 0) {
+        setAllCustomers(cloudCustomers);
+        setActiveCustomer((curr) => {
+          if (!curr) return null;
+          const matched = cloudCustomers.find(
+            (c) => c.id === curr.id ||
+                   (curr.phone && c.phone && c.phone.replace(/[^\d+]/g, '') === curr.phone.replace(/[^\d+]/g, '')) ||
+                   (curr.email && c.email && c.email.toLowerCase() === curr.email.toLowerCase())
+          );
+          if (matched) {
+            saveCustomer(matched);
+            return matched;
+          }
+          return curr;
+        });
+      }
+    });
+
+    // 6. Live Pharmacy Branding Logo synchronization (ensures official logo appears for all visitors & clients)
+    const unsubLogo = subscribeToFirestoreLogo((cloudLogo) => {
+      if (cloudLogo) {
+        saveStoredLogo(cloudLogo);
+      }
+    });
+
+    // 7. Local storage update event listener
+    const handleLocalCustChange = () => {
+      setAllCustomers(getStoredAllCustomers());
+    };
+    window.addEventListener('eldeeb_customers_updated', handleLocalCustChange);
+
     return () => {
       unsubProducts();
       unsubNotifs();
+      unsubSupabase();
+      unsubCustomers();
+      unsubLogo();
+      clearTimeout(githubFallbackTimer);
+      window.removeEventListener('eldeeb_customers_updated', handleLocalCustChange);
     };
-  }, []);
-
-  // Hydrate products catalog from IndexedDB if initial state is empty
-  useEffect(() => {
-    loadProductsFromIndexedDb().then((idbProducts) => {
-      if (idbProducts && idbProducts.length > 0) {
-        setProducts((current) => (current.length === 0 ? idbProducts : current));
-      }
-    });
-  }, []);
-
-  // Shared Supabase catalog: all visitors receive the same products in realtime.
-  useEffect(() => {
-    return subscribeToSupabaseProducts((updatedProducts) => {
-      if (updatedProducts.length === 0 && products.length > 0) {
-        // First admin visit: migrate the existing browser catalog instead of wiping it.
-        upsertSupabaseProducts(products).catch(() => {});
-        return;
-      }
-      setProducts(updatedProducts);
-      saveProducts(updatedProducts);
-    });
   }, []);
 
   // Persist cart
@@ -312,9 +378,8 @@ export default function App() {
       };
       setActiveCustomer(updated);
       saveCustomer(updated);
-      upsertSupabaseCustomer(updated).then((result) => {
-        if (!result.success) syncSaveCustomerToFirestore(updated);
-      });
+      syncSaveCustomerToFirestore(updated);
+      upsertSupabaseCustomer(updated).catch(() => {});
     }
   };
 
@@ -323,27 +388,37 @@ export default function App() {
     const updated = [newProd, ...products];
     setProducts(updated);
     saveProducts(updated);
-    const result = await upsertSupabaseProduct(newProd);
-    if (result.success) return { success: true, isOnline: true };
-    return syncAddProductToFirestore(newProd);
+    triggerDebouncedGitHubAutoSync(updated);
+    // Guarantee authoritative Firestore save and mirror to Supabase
+    const [fsRes] = await Promise.allSettled([
+      syncAddProductToFirestore(newProd),
+      upsertSupabaseProduct(newProd),
+    ]);
+    const isOnline = fsRes.status === 'fulfilled' && fsRes.value.success;
+    return { success: true, isOnline };
   };
 
   const handleDeleteProduct = (id: string) => {
     const updated = products.filter((p) => p.id !== id);
     setProducts(updated);
     saveProducts(updated);
-    deleteSupabaseProduct(id).then((result) => {
-      if (!result.success) syncDeleteProductFromFirestore(id);
-    });
+    triggerDebouncedGitHubAutoSync(updated);
+    syncDeleteProductFromFirestore(id);
+    deleteSupabaseProduct(id).catch(() => {});
   };
 
   const handleUpdateProduct = async (updatedProd: Product) => {
     const updated = products.map((p) => (p.id === updatedProd.id ? updatedProd : p));
     setProducts(updated);
     saveProducts(updated);
-    const result = await upsertSupabaseProduct(updatedProd);
-    if (result.success) return { success: true, isOnline: true };
-    return syncAddProductToFirestore(updatedProd);
+    triggerDebouncedGitHubAutoSync(updated);
+    // Guarantee authoritative Firestore save and mirror to Supabase
+    const [fsRes] = await Promise.allSettled([
+      syncAddProductToFirestore(updatedProd),
+      upsertSupabaseProduct(updatedProd),
+    ]);
+    const isOnline = fsRes.status === 'fulfilled' && fsRes.value.success;
+    return { success: true, isOnline };
   };
 
   const handleClearAllProducts = async () => {
@@ -359,7 +434,9 @@ export default function App() {
     const merged = Array.from(map.values());
     setProducts(merged);
     saveProducts(merged);
+    triggerDebouncedGitHubAutoSync(merged);
     await syncBatchUploadProductsToFirestore(imported);
+    await upsertSupabaseProducts(imported).catch(() => {});
   };
 
   const handleBroadcastNotification = (title: string, message: string, productId?: string) => {
@@ -875,7 +952,7 @@ export default function App() {
             onClose={() => setIsGoogleDriveOpen(false)}
             products={products}
             orders={getStoredOrders()}
-            customers={getStoredAllCustomers()}
+            customers={allCustomers}
             prescriptions={getStoredPrescriptions()}
           />
         )}

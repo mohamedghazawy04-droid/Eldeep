@@ -220,9 +220,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     };
 
     saveOrder(newOrder);
-    upsertSupabaseOrder(newOrder).then((result) => {
-      if (!result.success) syncSaveOrderToFirestore(newOrder);
-    });
+    syncSaveOrderToFirestore(newOrder);
+    upsertSupabaseOrder(newOrder).catch(() => {});
 
     // Update customer points: strictly deduct used points and credit newly earned points
     let updatedCustomerObj: Customer;
@@ -251,9 +250,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
 
     saveCustomer(updatedCustomerObj);
-    upsertSupabaseCustomer(updatedCustomerObj).then((result) => {
-      if (!result.success) syncSaveCustomerToFirestore(updatedCustomerObj);
-    });
+    syncSaveCustomerToFirestore(updatedCustomerObj);
+    upsertSupabaseCustomer(updatedCustomerObj).catch(() => {});
     onCustomerUpdated?.(updatedCustomerObj);
 
     // Launch WhatsApp with detailed loyalty points audit

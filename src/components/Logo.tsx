@@ -14,17 +14,17 @@ export const Logo: React.FC<LogoProps> = ({
   showSubtitle = true,
 }) => {
   const [logoSrc, setLogoSrc] = useState<string>(() => {
-    return getStoredLogo() || '/eldeeb_pharmacy_logo.jpg';
+    return getStoredLogo() || '/eldeeb_custom_brand_logo.webp' || '/eldeeb_pharmacy_logo.jpg';
   });
   const [fallbackIndex, setFallbackIndex] = useState(0);
 
-  const fallbackList = ['/eldeeb_pharmacy_logo.jpg', '/eldeeb_logo.jpg'];
+  const fallbackList = ['/eldeeb_custom_brand_logo.webp', '/eldeeb_pharmacy_logo.jpg', '/eldeeb_logo.jpg'];
 
   useEffect(() => {
     // 1. Listen for local logo updates
     const handleLogoUpdated = () => {
       const stored = getStoredLogo();
-      setLogoSrc(stored || '/eldeeb_pharmacy_logo.jpg');
+      setLogoSrc(stored || '/eldeeb_custom_brand_logo.webp' || '/eldeeb_pharmacy_logo.jpg');
       setFallbackIndex(0);
     };
 
@@ -40,7 +40,7 @@ export const Logo: React.FC<LogoProps> = ({
       } else {
         const stored = getStoredLogo();
         if (!stored) {
-          setLogoSrc('/eldeeb_pharmacy_logo.jpg');
+          setLogoSrc('/eldeeb_custom_brand_logo.webp');
           setFallbackIndex(0);
         }
       }
@@ -96,7 +96,7 @@ export const Logo: React.FC<LogoProps> = ({
               </linearGradient>
               <linearGradient id="cyanAccent" x1="0%" y1="100%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="#06b6d4" />
-                <stop offset="38bdf8" />
+                <stop offset="100%" stopColor="#38bdf8" />
               </linearGradient>
             </defs>
             <path

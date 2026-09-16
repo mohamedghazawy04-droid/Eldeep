@@ -57,9 +57,12 @@ import {
   syncClearAllFirestoreProducts,
   syncBroadcastNotificationToFirestore,
   syncSaveLogoToFirestore,
+  subscribeToFirestoreCustomers,
+  subscribeToFirestoreLogo,
 } from '../services/firestoreSync';
 import { getStoredAllCustomers, getStoredOrders, getStoredPrescriptions, getStoredLogo, saveStoredLogo } from '../services/storage';
 import { optimizeProductImage } from '../utils/imageOptimizer';
+import { GitHubBackupManager } from './GitHubBackupManager';
 
 export interface GitHubAppItem {
   id: string;
@@ -108,12 +111,12 @@ const DEFAULT_GITHUB_APPS: GitHubAppItem[] = [
     id: 'app-eldeeb-pharmacy',
     name: 'صيدلية الديب الإلكترونية',
     nameEn: 'El-Deeb Pharmacy Store & PWA',
-    repo: 'mohamedhgas4444/eldeeb-pharmacy',
+    repo: 'mohamedghazawy04-droid/Eldeep',
     branch: 'main',
     category: 'متجر وتطبيق عملاء',
     description: 'المتجر الإلكتروني الرئيسي، كتالوج الأدوية الذكي، طلبات الروشتات، ونظام الولاء السحابي.',
     liveUrl: window.location.origin,
-    githubUrl: 'https://github.com/mohamedhgas4444/eldeeb-pharmacy',
+    githubUrl: 'https://github.com/mohamedghazawy04-droid/Eldeep',
     lastCommitMessage: 'feat: Update pharmacy branding and checkout flows',
     lastCommitHash: '8f2a9c1',
     lastCommitTime: 'منذ دقيقتين',
@@ -158,12 +161,12 @@ const DEFAULT_GITHUB_APPS: GitHubAppItem[] = [
     id: 'app-pharma-erp',
     name: 'نظام الحسابات ومخازن الأدوية ERP',
     nameEn: 'Pharma ERP & Warehouse Inventory',
-    repo: 'mohamedhgas4444/pharma-erp-sync',
+    repo: 'mohamedghazawy04-droid/pharma-erp-sync',
     branch: 'main',
     category: 'إدارة ومخازن',
     description: 'برنامج نقاط البيع الكاشير، الفواتير الضريبية، جرد النواقص وربط الشركات الموردة للأدوية.',
     liveUrl: 'https://erp.eldeeb-pharma.com',
-    githubUrl: 'https://github.com/mohamedhgas4444/pharma-erp-sync',
+    githubUrl: 'https://github.com/mohamedghazawy04-droid/pharma-erp-sync',
     lastCommitMessage: 'fix(inventory): Auto-sync low stock medicines with distributor queue',
     lastCommitHash: 'c4e107b',
     lastCommitTime: 'اليوم، 11:20 ص',
@@ -199,12 +202,12 @@ const DEFAULT_GITHUB_APPS: GitHubAppItem[] = [
     id: 'app-delivery-captain',
     name: 'تطبيق كابتن التوصيل السريع (موتوسيكل سباق الديب)',
     nameEn: 'Superbike Racing Courier Driver Companion App',
-    repo: 'mohamedhgas4444/eldeeb-delivery-agent',
+    repo: 'mohamedghazawy04-droid/eldeeb-delivery-agent',
     branch: 'main',
     category: 'دليفري وشحن',
     description: 'تطبيق خاص بمناديب التوصيل وكباتن الموتوسيكلات لتأكيد استلام وتوصيل الطلبات للعنوان بالـ GPS.',
     liveUrl: 'https://driver.eldeeb-pharma.com',
-    githubUrl: 'https://github.com/mohamedhgas4444/eldeeb-delivery-agent',
+    githubUrl: 'https://github.com/mohamedghazawy04-droid/eldeeb-delivery-agent',
     lastCommitMessage: 'feat(gps): Optimize delivery route and customer location pin',
     lastCommitHash: '9a7d32e',
     lastCommitTime: 'أمس، 06:45 م',
@@ -239,12 +242,12 @@ const DEFAULT_GITHUB_APPS: GitHubAppItem[] = [
     id: 'app-rx-ai',
     name: 'بوابة الروشتات والذكاء الاصطناعي',
     nameEn: 'AI Prescription Vision OCR Engine',
-    repo: 'mohamedhgas4444/rx-ai-scanner',
+    repo: 'mohamedghazawy04-droid/rx-ai-scanner',
     branch: 'production',
     category: 'ذكاء اصطناعي وطبي',
     description: 'محرك قراءة الروشتات الطبية المكتوبة بخط اليد بالذكاء الاصطناعي وتجهيز بدائل الأدوية.',
     liveUrl: 'https://ai-rx.eldeeb-pharma.com',
-    githubUrl: 'https://github.com/mohamedhgas4444/rx-ai-scanner',
+    githubUrl: 'https://github.com/mohamedghazawy04-droid/rx-ai-scanner',
     lastCommitMessage: 'refactor(vision): Improve Egyptian handwritten prescription accuracy to 98.4%',
     lastCommitHash: '5e8b112',
     lastCommitTime: 'منذ 3 أيام',
@@ -282,6 +285,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   onDeleteProduct,
   onUpdateProduct,
   onClearAllProducts,
+  onBatchImportProducts,
   onBroadcastNotification,
   onBackToStore,
 }) => {
@@ -354,7 +358,33 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Customers & Orders state for preview
-  const [customersList] = useState<Customer[]>(getStoredAllCustomers);
+  const [customersList, setCustomersList] = useState<Customer[]>(getStoredAllCustomers);
+
+  // Live Firestore subscription for Customers and Logo in Admin Portal
+  useEffect(() => {
+    const unsubCustomers = subscribeToFirestoreCustomers((cloudCustomers) => {
+      if (cloudCustomers && cloudCustomers.length > 0) {
+        setCustomersList(cloudCustomers);
+      }
+    });
+
+    const unsubLogo = subscribeToFirestoreLogo((cloudLogo) => {
+      if (cloudLogo) {
+        setPortalLogo(cloudLogo);
+      }
+    });
+
+    const handleLocalCustChange = () => {
+      setCustomersList(getStoredAllCustomers());
+    };
+    window.addEventListener('eldeeb_customers_updated', handleLocalCustChange);
+
+    return () => {
+      unsubCustomers();
+      unsubLogo();
+      window.removeEventListener('eldeeb_customers_updated', handleLocalCustChange);
+    };
+  }, []);
 
   // Save GitHub Apps
   const saveGithubApps = (apps: GitHubAppItem[]) => {
@@ -871,6 +901,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           {/* ================= TAB 1: GITHUB CONNECTED APPS & REAL-TIME LIVE EDITOR ================= */}
           {activeTab === 'github' && (
             <div className="space-y-6">
+              {/* Permanent Cloud Backup to GitHub */}
+              <GitHubBackupManager
+                products={products}
+                onProductsRestored={(restored) => onBatchImportProducts?.(restored)}
+              />
+
               {/* Top Banner with Stats & Controls */}
               <div className="p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 border border-slate-800 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
                 <div>
@@ -943,7 +979,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           required
                           value={newRepoName}
                           onChange={(e) => setNewRepoName(e.target.value)}
-                          placeholder="mohamedhgas4444/my-new-app"
+                          placeholder="mohamedghazawy04-droid/my-new-app"
                           className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
                         />
                       </div>

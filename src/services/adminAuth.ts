@@ -1,15 +1,25 @@
 import { supabase } from './supabase';
 
-export const MANAGER_EMAIL = 'mohamedgedo360@yahoo.com';
+export const MANAGER_EMAIL = 'mohamedghazawy04@gmail.com';
+export const ALLOWED_MANAGER_EMAILS = [
+  'mohamedghazawy04@gmail.com',
+  'mohamedgedo360@yahoo.com',
+  'mohamedhgas4444@gmail.com',
+];
+
+export function isManagerEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return ALLOWED_MANAGER_EMAILS.includes(email.trim().toLowerCase());
+}
 
 export async function getManagerSession(): Promise<boolean> {
   const { data } = await supabase.auth.getSession();
-  return data.session?.user.email?.toLowerCase() === MANAGER_EMAIL;
+  return isManagerEmail(data.session?.user.email);
 }
 
 export function watchManagerSession(onChange: (allowed: boolean) => void): () => void {
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    onChange(session?.user.email?.toLowerCase() === MANAGER_EMAIL);
+    onChange(isManagerEmail(session?.user.email));
   });
   return () => data.subscription.unsubscribe();
 }

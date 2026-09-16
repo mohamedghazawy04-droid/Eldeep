@@ -7,6 +7,7 @@ import {
   getDoc,
   onSnapshot,
   query,
+  where,
   orderBy,
   limit,
 } from 'firebase/firestore';
@@ -20,6 +21,8 @@ import {
   saveOrder,
   savePrescription,
   saveCustomer,
+  saveAllCustomers,
+  getStoredAllCustomers,
   calculateTier,
 } from './storage';
 
@@ -348,22 +351,55 @@ export function subscribeToFirestorePrescriptions(
 
 /**
  * Save or Update Customer in Firestore
+ * Connects any customer who registers or places an order directly to the Firestore customers collection
  */
 export async function syncSaveCustomerToFirestore(
   customer: Customer
 ): Promise<{ success: boolean; isOnline: boolean; error?: string }> {
+  // 1. Immediately cache locally
   saveCustomer(customer);
+  try {
+    const all = getStoredAllCustomers();
+    const idx = all.findIndex(
+      (c) => c.id === customer.id ||
+             (customer.phone && c.phone && c.phone.replace(/[^\d+]/g, '') === customer.phone.replace(/[^\d+]/g, '')) ||
+             (customer.email && c.email && c.email.toLowerCase() === customer.email.toLowerCase())
+    );
+    if (idx >= 0) {
+      all[idx] = { ...all[idx], ...customer };
+    } else {
+      all.unshift(customer);
+    }
+    saveAllCustomers(all);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('eldeeb_customers_updated'));
+    }
+  } catch (e) {
+    console.warn('Local customer cache error:', e);
+  }
+
   if (!isFirebaseReady) {
     return { success: true, isOnline: false, error: 'وضع أوفلاين مؤقت' };
   }
+
   try {
-    const docId = customer.phone.replace(/[^\d+]/g, '') || customer.id;
+    // Determine the unique, clean document ID for Firestore
+    const cleanPhoneDigits = (customer.phone || '').replace(/[^\d+]/g, '');
+    let docId = cleanPhoneDigits.length >= 7 ? cleanPhoneDigits : '';
+    if (!docId && customer.email && customer.email.includes('@')) {
+      docId = 'em_' + customer.email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    }
+    if (!docId) {
+      docId = customer.id || 'cust_' + Date.now();
+    }
+
     const cleanCustomer = sanitizeForFirestore({
       ...customer,
       docId,
       updatedAt: Date.now(),
       registeredOnline: true,
     });
+
     await setDoc(
       doc(db, CUSTOMERS_COL, docId),
       cleanCustomer,
@@ -375,10 +411,6 @@ export async function syncSaveCustomerToFirestore(
     return { success: false, isOnline: false, error: err?.message || 'خطأ في الحفظ السحابي' };
   }
 }
-    console.error('Failed to save customer to Firestore:', err);
-    return { success: false, isOnline: false, error: err?.message || 'خطأ في الحفظ السحابي' };
-  }
-}
 
 /**
  * Delete a Customer from Firestore
@@ -386,7 +418,10 @@ export async function syncSaveCustomerToFirestore(
 export async function syncDeleteCustomerFromFirestore(customer: Customer): Promise<void> {
   if (!isFirebaseReady) return;
   try {
-    const docId = customer.phone.replace(/[^\d+]/g, '') || customer.id;
+    const cleanPhoneDigits = (customer.phone || '').replace(/[^\d+]/g, '');
+    const docId = cleanPhoneDigits.length >= 7 
+      ? cleanPhoneDigits 
+      : (customer.email ? 'em_' + customer.email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_') : customer.id);
     await deleteDoc(doc(db, CUSTOMERS_COL, docId));
   } catch (err) {
     console.error('Failed to delete customer from Firestore:', err);
@@ -409,25 +444,53 @@ export async function syncUpdateCustomerPointsInFirestore(
 }
 
 /**
- * Fetch Customer Profile from Firestore by phone
+ * Fetch Customer Profile from Firestore by phone, email, or customer ID
  */
-export async function fetchCustomerFromFirestore(phone: string): Promise<Customer | null> {
-  if (!isFirebaseReady) return null;
+export async function fetchCustomerFromFirestore(identifier: string): Promise<Customer | null> {
+  if (!isFirebaseReady || !identifier) return null;
+  const clean = identifier.trim();
   try {
-    const docId = phone.replace(/[^\d+]/g, '');
-    if (!docId) return null;
-    const snap = await getDoc(doc(db, CUSTOMERS_COL, docId));
-    if (snap.exists()) {
-      return snap.data() as Customer;
+    // 1. If searching by Email
+    if (clean.includes('@')) {
+      const emailDocId = 'em_' + clean.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      const directSnap = await getDoc(doc(db, CUSTOMERS_COL, emailDocId));
+      if (directSnap.exists()) {
+        return directSnap.data() as Customer;
+      }
+      const q = query(collection(db, CUSTOMERS_COL), where('email', '==', clean.toLowerCase()), limit(1));
+      const qSnap = await getDocs(q);
+      if (!qSnap.empty) {
+        return qSnap.docs[0].data() as Customer;
+      }
+    }
+
+    // 2. If searching by Phone
+    const phoneDigits = clean.replace(/[^\d+]/g, '');
+    if (phoneDigits.length >= 7) {
+      const directSnap = await getDoc(doc(db, CUSTOMERS_COL, phoneDigits));
+      if (directSnap.exists()) {
+        return directSnap.data() as Customer;
+      }
+      const q = query(collection(db, CUSTOMERS_COL), where('phone', '==', clean), limit(1));
+      const qSnap = await getDocs(q);
+      if (!qSnap.empty) {
+        return qSnap.docs[0].data() as Customer;
+      }
+    }
+
+    // 3. If searching by direct ID
+    const idSnap = await getDoc(doc(db, CUSTOMERS_COL, clean));
+    if (idSnap.exists()) {
+      return idSnap.data() as Customer;
     }
   } catch (err) {
-    console.warn('Could not fetch customer by phone:', err);
+    console.warn('Could not fetch customer from Firestore:', err);
   }
   return null;
 }
 
 /**
- * Subscribe to Customers in Firestore (Admin)
+ * Subscribe to Customers in Firestore (Live Admin & Store sync)
  */
 export function subscribeToFirestoreCustomers(
   onUpdate: (customers: Customer[]) => void
@@ -441,6 +504,7 @@ export function subscribeToFirestoreCustomers(
         const items: Customer[] = [];
         snapshot.forEach((d) => items.push(d.data() as Customer));
         if (items.length > 0) {
+          saveAllCustomers(items);
           onUpdate(items);
         }
       },

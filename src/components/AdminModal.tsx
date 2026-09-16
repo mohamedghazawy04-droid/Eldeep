@@ -34,7 +34,9 @@ import {
   Edit3,
   Server,
   Activity,
+  Github,
 } from 'lucide-react';
+import { uploadBackupToGitHub, downloadBackupJsonFile } from '../services/githubBackup';
 import {
   AppNotification,
   Customer,
@@ -332,6 +334,21 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const [githubSyncing, setGithubSyncing] = useState(false);
+  const handleUploadToGitHub = async () => {
+    setGithubSyncing(true);
+    try {
+      const res = await uploadBackupToGitHub(products);
+      if (res.success) {
+        alert(`تم رفع وتحديث النسخة الاحتياطية بنجاح على GitHub (${products.length} صنف)!`);
+      } else {
+        alert(res.error || 'فشل الرفع إلى GitHub. تأكد من إعداد رمز الوصول الشخصي واسم المستودع.');
+      }
+    } finally {
+      setGithubSyncing(false);
+    }
   };
 
   const handleCreateProduct = (e: React.FormEvent) => {
@@ -1521,6 +1538,43 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                             onChange={handleImportBackupFile}
                           />
                         </label>
+                      </div>
+                    </div>
+
+                    {/* Permanent GitHub Cloud Backup Card */}
+                    <div className="p-4 sm:p-5 bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/50 text-white rounded-3xl border border-cyan-500/30 space-y-3 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-bold text-sm text-cyan-300">
+                          <Github className="w-4 h-4 text-cyan-400" />
+                          <span>المستودع السحابي الدائم (GitHub - مجاني للأبد)</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                          Free Forever 100%
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        وسيلة أمان وحفظ دائم لا تنتهي ولا تمسح أبداً، لحماية بيانات صيدلية الديب من أي تعطل أو فقدان.
+                      </p>
+
+                      <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          disabled={githubSyncing}
+                          onClick={handleUploadToGitHub}
+                          className="w-full sm:flex-1 py-2.5 px-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                        >
+                          <Github className={`w-3.5 h-3.5 ${githubSyncing ? 'animate-spin' : ''}`} />
+                          <span>{githubSyncing ? 'جارٍ الحفظ على GitHub...' : 'مزامنة مع GitHub الآن'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => downloadBackupJsonFile(products)}
+                          className="w-full sm:flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                        >
+                          <Download className="w-3.5 h-3.5 text-amber-400" />
+                          <span>تحميل ملف JSON لـ GitHub</span>
+                        </button>
                       </div>
                     </div>
                   </div>
