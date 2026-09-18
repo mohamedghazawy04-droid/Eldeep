@@ -772,6 +772,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={onBackToStore}
+            className="p-2 bg-rose-950/70 hover:bg-rose-800 text-rose-200 rounded-xl border border-rose-700/70 transition-colors"
+            title="إغلاق لوحة المدير والعودة للمتجر"
+            aria-label="إغلاق لوحة المدير"
+          >
+            <X className="w-4 h-4" />
+          </button>
           {/* Cloud Safety Status Button with Gentle Pulse Animation */}
           <button
             type="button"
@@ -2073,9 +2082,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       {/* Gemini Studio Camera Modal */}
       {isStudioOpen && (
         <GeminiProductStudio
-          isOpen={isStudioOpen}
-          onClose={() => setIsStudioOpen(false)}
-          onSelectImage={(url) => {
+          onCancel={() => setIsStudioOpen(false)}
+          onImageEnhanced={(url) => {
             setImage(url);
             setIsStudioOpen(false);
           }}

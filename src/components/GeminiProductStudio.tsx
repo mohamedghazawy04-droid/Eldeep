@@ -60,6 +60,10 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
   const startCamera = async (mode: 'environment' | 'user' = facingMode) => {
     stopCamera();
     setCameraError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('الكاميرا تحتاج إلى HTTPS ومتصفحًا يدعمها. افتح الموقع من رابط Vercel أو استخدم رفع صورة من الجهاز.');
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -72,12 +76,13 @@ export const GeminiProductStudio: React.FC<GeminiProductStudioProps> = ({
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
       }
       setIsCameraActive(true);
     } catch (err: any) {
       console.error('Camera access error:', err);
-      setCameraError('تعذر فتح الكاميرا، يرجى التأكد من منح الإذن للمتصفح أو رفع صورة من الملفات.');
+      const name = err?.name === 'NotAllowedError' ? 'تم رفض إذن الكاميرا.' : 'تعذر فتح الكاميرا.';
+      setCameraError(`${name} اسمح للمتصفح بالكاميرا من رمز القفل بجانب الرابط، أو ارفع صورة من الجهاز.`);
       setIsCameraActive(false);
     }
   };
