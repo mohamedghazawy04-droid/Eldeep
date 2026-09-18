@@ -100,9 +100,9 @@ export interface GitHubAppItem {
 
 interface AdminPortalProps {
   products: Product[];
-  onAddProduct: (product: Product) => void;
+  onAddProduct: (product: Product) => Promise<{ success: boolean; error?: string }> | void;
   onDeleteProduct: (productId: string) => void;
-  onUpdateProduct: (product: Product) => void;
+  onUpdateProduct: (product: Product) => Promise<{ success: boolean; error?: string }> | void;
   onClearAllProducts?: () => void;
   onBatchImportProducts?: (products: Product[]) => void;
   onBroadcastNotification: (title: string, message: string) => void;
@@ -554,7 +554,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   };
 
   // Product Save / Edit Handler
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nameAr.trim() || !price) {
       alert('يرجى ملء اسم الصنف والسعر');
@@ -590,7 +590,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         isComingSoon,
       };
 
-      onUpdateProduct(updated);
+      const result = await onUpdateProduct(updated);
+      if (result && !result.success) {
+        alert(`تعذر حفظ الصورة أو المنتج: ${result.error || 'تحقق من تسجيل دخول المدير'}`);
+        return;
+      }
       syncAddProductToFirestore(updated);
       resetProductForm();
       alert(`تم حفظ تعديل ${updated.nameAr} بنجاح!`);
@@ -616,7 +620,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         isComingSoon,
       };
 
-      onAddProduct(newProd);
+      const result = await onAddProduct(newProd);
+      if (result && !result.success) {
+        alert(`تعذر رفع الصورة أو حفظ المنتج: ${result.error || 'تحقق من تسجيل دخول المدير'}`);
+        return;
+      }
       syncAddProductToFirestore(newProd);
       resetProductForm();
       alert(`تمت إضافة ${newProd.nameAr} بنجاح للكتالوج!`);

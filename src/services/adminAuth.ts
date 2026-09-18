@@ -1,10 +1,8 @@
 import { supabase } from './supabase';
 
-export const MANAGER_EMAIL = 'mohamedghazawy04@gmail.com';
+export const MANAGER_EMAIL = 'mohamedgedo360@yahoo.com';
 export const ALLOWED_MANAGER_EMAILS = [
-  'mohamedghazawy04@gmail.com',
   'mohamedgedo360@yahoo.com',
-  'mohamedhgas4444@gmail.com',
 ];
 
 export function isManagerEmail(email?: string | null): boolean {
