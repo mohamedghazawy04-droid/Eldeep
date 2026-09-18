@@ -222,15 +222,15 @@ export default function App() {
       }
     });
 
-    // 3. Fallback sync from Supabase ONLY if catalog is currently empty (prevents wipe-out race conditions)
+    // 3. Supabase is the shared source of truth. Replace stale local catalogs
+    // once the cloud catalog is available; only migrate local data when cloud is empty.
     const unsubSupabase = subscribeToSupabaseProducts((supabaseProducts) => {
       if (supabaseProducts && supabaseProducts.length > 0) {
+        saveProducts(supabaseProducts);
+        setProducts(supabaseProducts);
+      } else if (supabaseProducts && supabaseProducts.length === 0) {
         setProducts((current) => {
-          if (current.length === 0) {
-            saveProducts(supabaseProducts);
-            syncBatchUploadProductsToFirestore(supabaseProducts).catch(() => {});
-            return supabaseProducts;
-          }
+          if (current.length > 0) upsertSupabaseProducts(current).catch(() => {});
           return current;
         });
       }

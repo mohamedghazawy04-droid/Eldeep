@@ -724,6 +724,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       p.nameEn.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
       (p.activeIngredient && p.activeIngredient.toLowerCase().includes(productSearchTerm.toLowerCase()))
   );
+  const visibleProducts = filteredProducts.slice(0, 100);
 
   return (
     <div
@@ -1468,7 +1469,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 </div>
 
                 <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                  {filteredProducts.map((p) => (
+                  {visibleProducts.map((p) => (
                     <div
                       key={p.id}
                       className="p-3 bg-slate-800/70 border border-slate-700/60 rounded-2xl flex items-center justify-between gap-3 text-xs"
@@ -1513,6 +1514,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     </div>
                   ))}
                 </div>
+                {filteredProducts.length > visibleProducts.length && (
+                  <p className="text-[11px] text-slate-400 text-center">
+                    يتم عرض أول {visibleProducts.length} نتيجة من {filteredProducts.length}. استخدم البحث للوصول إلى أي صنف.
+                  </p>
+                )}
               </div>
             </div>
           )}
