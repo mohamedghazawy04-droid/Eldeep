@@ -230,11 +230,11 @@ export default function App() {
         setProducts(supabaseProducts);
       } else if (supabaseProducts && supabaseProducts.length === 0) {
         setProducts((current) => {
-          if (current.length > 0) upsertSupabaseProducts(current).catch(() => {});
+          if (viewMode === 'admin' && current.length > 0) upsertSupabaseProducts(current).catch(() => {});
           return current;
         });
       }
-    });
+    }, viewMode === 'admin');
 
     // 4. Emergency GitHub Cloud Fallback / Curated Catalog Seeding (if catalog is still empty)
     const githubFallbackTimer = setTimeout(() => {
@@ -305,7 +305,7 @@ export default function App() {
       clearTimeout(githubFallbackTimer);
       window.removeEventListener('eldeeb_customers_updated', handleLocalCustChange);
     };
-  }, []);
+  }, [viewMode]);
 
   // Persist cart
   useEffect(() => {

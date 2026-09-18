@@ -52,9 +52,13 @@ export function supabaseRowToProduct(row: SupabaseProductRow): Product {
   };
 }
 
-export async function fetchSupabaseProducts(): Promise<Product[] | null> {
+export async function fetchSupabaseProducts(includeUnavailable = false): Promise<Product[] | null> {
   if (!isSupabaseReady) return null;
-  const { data, error } = await supabase.from(TABLE).select('*').order('updated_at', { ascending: false });
+  let query = supabase.from(TABLE).select('*').order('updated_at', { ascending: false });
+  if (!includeUnavailable) {
+    query = query.eq('in_stock', true).eq('is_coming_soon', false);
+  }
+  const { data, error } = await query;
   if (error) {
     console.warn('Supabase products read failed:', error.message);
     return null;
@@ -74,16 +78,19 @@ export async function deleteSupabaseProduct(id: string): Promise<{ success: bool
   return error ? { success: false, error: error.message } : { success: true };
 }
 
-export function subscribeToSupabaseProducts(onUpdate: (products: Product[]) => void): () => void {
+export function subscribeToSupabaseProducts(
+  onUpdate: (products: Product[]) => void,
+  includeUnavailable = false
+): () => void {
   if (!isSupabaseReady) return () => {};
   let active = true;
-  fetchSupabaseProducts().then((products) => {
+  fetchSupabaseProducts(includeUnavailable).then((products) => {
     if (active && products) onUpdate(products);
   });
   const channel = supabase
     .channel('public-products-catalog')
     .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, () => {
-      fetchSupabaseProducts().then((products) => {
+      fetchSupabaseProducts(includeUnavailable).then((products) => {
         if (active && products) onUpdate(products);
       });
     })
