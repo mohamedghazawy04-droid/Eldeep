@@ -1,4 +1,5 @@
 import { Product, ProductCategory } from '../types';
+import { EZABY_TOP_PRODUCTS } from './ezabyCatalog';
 
 export interface CategoryInfo {
   id: ProductCategory;
@@ -68,8 +69,8 @@ export const CATEGORIES: CategoryInfo[] = [
   },
 ];
 
-// Empty by default for custom pharmacist uploads
-export const INITIAL_PRODUCTS: Product[] = [];
+// Curated catalog of top-selling pharmacy products (medicines, vitamins, skincare, baby care, medical devices)
+export const INITIAL_PRODUCTS: Product[] = EZABY_TOP_PRODUCTS;
 
 export const INITIAL_NOTIFICATIONS = [
   {

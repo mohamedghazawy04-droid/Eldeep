@@ -15,7 +15,7 @@ import {
   PackageCheck,
 } from 'lucide-react';
 import { Product, ProductCategory, CartItem, Customer, AppNotification } from './types';
-import { CATEGORIES } from './data/initialData';
+import { CATEGORIES, INITIAL_PRODUCTS } from './data/initialData';
 import {
   getStoredProducts,
   loadProductsFromIndexedDb,
@@ -235,7 +235,7 @@ export default function App() {
       }
     });
 
-    // 4. Emergency GitHub Cloud Fallback (if catalog is still empty after cloud and local storage checks)
+    // 4. Emergency GitHub Cloud Fallback / Curated Catalog Seeding (if catalog is still empty)
     const githubFallbackTimer = setTimeout(() => {
       setProducts((current) => {
         if (current.length === 0) {
@@ -243,12 +243,24 @@ export default function App() {
             if (res.success && res.products && res.products.length > 0) {
               setProducts(res.products);
               saveProducts(res.products);
+              return;
             }
-          }).catch(() => {});
+            if (INITIAL_PRODUCTS && INITIAL_PRODUCTS.length > 0) {
+              setProducts(INITIAL_PRODUCTS);
+              saveProducts(INITIAL_PRODUCTS);
+              syncBatchUploadProductsToFirestore(INITIAL_PRODUCTS).catch(() => {});
+            }
+          }).catch(() => {
+            if (INITIAL_PRODUCTS && INITIAL_PRODUCTS.length > 0) {
+              setProducts(INITIAL_PRODUCTS);
+              saveProducts(INITIAL_PRODUCTS);
+              syncBatchUploadProductsToFirestore(INITIAL_PRODUCTS).catch(() => {});
+            }
+          });
         }
         return current;
       });
-    }, 2500);
+    }, 2000);
 
     // 5. Live Customer Database synchronization (links all registered customers across devices)
     const unsubCustomers = subscribeToFirestoreCustomers((cloudCustomers) => {

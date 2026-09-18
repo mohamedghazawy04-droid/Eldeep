@@ -46,6 +46,7 @@ import {
   ProductCategory,
 } from '../types';
 import { CATEGORIES } from '../data/initialData';
+import { EZABY_TOP_PRODUCTS } from '../data/ezabyCatalog';
 import { CustomersManager } from './CustomersManager';
 import {
   addBroadcastNotification,
@@ -556,6 +557,23 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     alert('تمت إزالة الأصناف الوهمية والتجريبية بنجاح!');
   };
 
+  const handleImportEzabyCatalog = async () => {
+    const confirmImport = window.confirm(
+      `هل تود استيراد باقة أصناف العزبي الأكثر طلباً ومبيعاً (${EZABY_TOP_PRODUCTS.length} صنفاً)؟\n\nتشمل الباقة أدوية أساسية، فيتامينات، عناية بالبشرة، صحة الطفل، وأجهزة طبية مع الصور والأسعار ونقاط الولاء التلقائية.\nيمكنك تعديل أي صنف أو حذفه بسهولة في أي وقت.`
+    );
+    if (!confirmImport) return;
+
+    if (onBatchImportProducts) {
+      await onBatchImportProducts(EZABY_TOP_PRODUCTS);
+    } else {
+      for (const p of EZABY_TOP_PRODUCTS) {
+        onAddProduct(p);
+        syncAddProductToFirestore(p);
+      }
+    }
+    alert(`تم استيراد ${EZABY_TOP_PRODUCTS.length} صنفاً بنجاح وحفظها سحابياً! يمكنك الآن تعديل أي صنف أو حذفه.`);
+  };
+
   const handleSendBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastTitle.trim() || !broadcastMessage.trim()) {
@@ -831,6 +849,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleImportEzabyCatalog}
+                        className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-bold text-xs shrink-0 shadow-sm transition-transform active:scale-95 flex items-center gap-1.5"
+                        title="تحميل باقة أصناف العزبي الأكثر طلباً ومبيعاً في الصيدليات المصرية"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                        <span>استيراد أصناف العزبي الأكثر طلباً ({EZABY_TOP_PRODUCTS.length})</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={handleRemoveDemoProducts}

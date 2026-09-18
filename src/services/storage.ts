@@ -98,6 +98,15 @@ export function getStoredProducts(): Product[] {
     // Ignore parse or read error
   }
 
+  // 3. Fallback to Initial Curated Pharmacy Catalog (El Ezaby / top products)
+  if (INITIAL_PRODUCTS && INITIAL_PRODUCTS.length > 0) {
+    const calibrated = ensureProductLoyaltySystem(INITIAL_PRODUCTS);
+    memoryProductsCache = calibrated;
+    saveProductsToLocalStorage(calibrated);
+    setIdbItem(STORAGE_KEYS.PRODUCTS, calibrated).catch(() => {});
+    return calibrated;
+  }
+
   return [];
 }
 
