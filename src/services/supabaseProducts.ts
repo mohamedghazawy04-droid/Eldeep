@@ -54,16 +54,26 @@ export function supabaseRowToProduct(row: SupabaseProductRow): Product {
 
 export async function fetchSupabaseProducts(includeUnavailable = false): Promise<Product[] | null> {
   if (!isSupabaseReady) return null;
-  let query = supabase.from(TABLE).select('*').order('updated_at', { ascending: false });
-  if (!includeUnavailable) {
-    query = query.eq('in_stock', true).eq('is_coming_soon', false);
+  const pageSize = 1000;
+  const rows: SupabaseProductRow[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    let query = supabase
+      .from(TABLE)
+      .select('*')
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (!includeUnavailable) {
+      query = query.eq('in_stock', true).eq('is_coming_soon', false);
+    }
+    const { data, error } = await query;
+    if (error) {
+      console.warn('Supabase products read failed:', error.message);
+      return null;
+    }
+    rows.push(...((data || []) as SupabaseProductRow[]));
+    if (!data || data.length < pageSize) break;
   }
-  const { data, error } = await query;
-  if (error) {
-    console.warn('Supabase products read failed:', error.message);
-    return null;
-  }
-  return (data || []).map((row) => supabaseRowToProduct(row as SupabaseProductRow));
+  return rows.map((row) => supabaseRowToProduct(row));
 }
 
 export async function upsertSupabaseProduct(product: Product): Promise<{ success: boolean; error?: string }> {
