@@ -431,6 +431,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       points: calculatedPoints,
       image: defaultImg,
       isNew: true,
+      createdAt: Date.now(),
       stockQuantity: isNaN(qtyNumber) ? undefined : qtyNumber,
       isLowStock: isLowStock || (!isNaN(qtyNumber) && qtyNumber > 0 && qtyNumber <= 5),
       isComingSoon,

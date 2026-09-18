@@ -43,6 +43,7 @@ import {
   syncAddProductToFirestore,
   syncDeleteProductFromFirestore,
   syncBroadcastNotificationToFirestore,
+  syncMarkNotificationsReadInFirestore,
   syncSaveCustomerToFirestore,
   syncClearAllFirestoreProducts,
   syncBatchUploadProductsToFirestore,
@@ -393,14 +394,26 @@ export default function App() {
 
   // Admin handlers
   const handleAddProduct = async (newProd: Product) => {
-    const updated = [newProd, ...products];
+    const now = Date.now();
+    const productWithMeta: Product = {
+      ...newProd,
+      isNew: true,
+      createdAt: newProd.createdAt || now,
+    };
+    const updated = [productWithMeta, ...products];
     setProducts(updated);
     saveProducts(updated);
     triggerDebouncedGitHubAutoSync(updated);
+
+    // Automatically display in notifications list for customers
+    const notifTitle = `📦 صنف جديد: ${productWithMeta.nameAr}`;
+    const notifMsg = `تمت إضافة ${productWithMeta.nameAr} إلى الصيدلية بسعر ${productWithMeta.price} ج.م مع +${productWithMeta.points} نقطة ولاء!`;
+    handleBroadcastNotification(notifTitle, notifMsg, productWithMeta.id);
+
     // Guarantee authoritative Firestore save and mirror to Supabase
     const [fsRes] = await Promise.allSettled([
-      syncAddProductToFirestore(newProd),
-      upsertSupabaseProduct(newProd),
+      syncAddProductToFirestore(productWithMeta),
+      upsertSupabaseProduct(productWithMeta),
     ]);
     const isOnline = fsRes.status === 'fulfilled' && fsRes.value.success;
     return { success: true, isOnline };
@@ -436,15 +449,30 @@ export default function App() {
   };
 
   const handleBatchImportProducts = async (imported: Product[]) => {
+    const now = Date.now();
+    const mappedImported = imported.map((p) => ({
+      ...p,
+      isNew: p.isNew !== undefined ? p.isNew : true,
+      createdAt: p.createdAt || now,
+    }));
     const map = new Map<string, Product>();
     products.forEach((p) => map.set(p.id, p));
-    imported.forEach((p) => map.set(p.id, p));
+    mappedImported.forEach((p) => map.set(p.id, p));
     const merged = Array.from(map.values());
     setProducts(merged);
     saveProducts(merged);
     triggerDebouncedGitHubAutoSync(merged);
-    await syncBatchUploadProductsToFirestore(imported);
-    await upsertSupabaseProducts(imported).catch(() => {});
+
+    // Broadcast summary notification
+    if (mappedImported.length > 0) {
+      handleBroadcastNotification(
+        `📦 تم توفير أصناف جديدة بالصيدلية (${mappedImported.length})`,
+        `تمت إضافة ${mappedImported.length} صنف ومنتج طبي جديد إلى قائمة الصيدلية. تصفح الأقسام الآن!`
+      );
+    }
+
+    await syncBatchUploadProductsToFirestore(mappedImported);
+    await upsertSupabaseProducts(mappedImported).catch(() => {});
   };
 
   const handleBroadcastNotification = (title: string, message: string, productId?: string) => {
@@ -453,10 +481,21 @@ export default function App() {
     syncBroadcastNotificationToFirestore(title, message, productId);
   };
 
-  const handleMarkAllNotificationsRead = () => {
+  const handleMarkAllNotificationsRead = async () => {
+    const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
     const updated = notifications.map((n) => ({ ...n, read: true }));
     setNotifications(updated);
     saveNotifications(updated);
+    if (unreadIds.length > 0) {
+      await syncMarkNotificationsReadInFirestore(unreadIds);
+    }
+  };
+
+  const handleDismissNotification = async (notifId: string) => {
+    const updated = notifications.map((n) => (n.id === notifId ? { ...n, read: true } : n));
+    setNotifications(updated);
+    saveNotifications(updated);
+    await syncMarkNotificationsReadInFirestore([notifId]);
   };
 
   // Filtered Products
@@ -580,9 +619,9 @@ export default function App() {
                 </button>
 
                 <a
-                  href={`https://wa.me/${PHARMACY_WHATSAPP_NUMBER}?text=${encodeURIComponent('مرحباً صيدلية الديب، أود الاستفسار عن توفر دواء وطلب توصيل.')}`}
+                  href={`https://api.whatsapp.com/send?phone=${PHARMACY_WHATSAPP_NUMBER}&text=${encodeURIComponent('مرحباً صيدلية الديب، أود الاستفسار عن توفر دواء وطلب توصيل.')}`}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="px-5 py-3 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-2xl font-bold text-xs sm:text-sm border border-white/20 flex items-center gap-2 transition-all active:scale-95"
                 >
                   <MessageCircle className="w-4 h-4 text-emerald-400" />
@@ -945,6 +984,7 @@ export default function App() {
             onClose={() => setIsNotificationsOpen(false)}
             notifications={notifications}
             onMarkAllRead={handleMarkAllNotificationsRead}
+            onDismissNotification={handleDismissNotification}
             onSelectProduct={(pId) => {
               const prod = products.find((p) => p.id === pId);
               if (prod) setSelectedProduct(prod);

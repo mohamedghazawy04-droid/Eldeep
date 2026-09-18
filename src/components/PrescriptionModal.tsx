@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Upload, Camera, FileText, Send, CheckCircle2, Phone, User, MapPin, Share2, Download, ExternalLink, Copy } from 'lucide-react';
 import { Customer, PrescriptionOrder } from '../types';
-import { createPrescriptionWhatsAppUrl } from '../services/whatsapp';
+import { createPrescriptionWhatsAppUrl, openWhatsApp } from '../services/whatsapp';
 import { savePrescription } from '../services/storage';
 import { syncSavePrescriptionToFirestore } from '../services/firestoreSync';
 import confetti from 'canvas-confetti';
@@ -212,10 +212,8 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
       // ignore
     }
 
-    // Open WhatsApp after a short delay
-    setTimeout(() => {
-      window.open(waUrl, '_blank');
-    }, 800);
+    // Open WhatsApp safely across iOS and desktop
+    openWhatsApp(waUrl);
   };
 
   const handleShareImageFile = async () => {
@@ -361,15 +359,20 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
               {/* Action Buttons */}
               <div className="w-full flex flex-col gap-2 pt-2">
                 {submittedWaUrl && (
-                  <a
-                    href={submittedWaUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-95"
-                  >
-                    <span>فتح محادثة الواتساب وتأكيد الطلب الآن</span>
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
+                  <>
+                    <a
+                      href={submittedWaUrl}
+                      target="_top"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-95"
+                    >
+                      <span>فتح محادثة الواتساب وتأكيد الطلب الآن</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
+                      📱 لمستخدمي الآيفون: إذا لم يفتح الواتساب تلقائياً، اضغط على الزر الأخضر أعلاه.
+                    </p>
+                  </>
                 )}
                 <button
                   id="done-prescription-btn"

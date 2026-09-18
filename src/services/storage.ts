@@ -405,19 +405,41 @@ export function saveNotifications(notifications: AppNotification[]): void {
   }
 }
 
-export function addBroadcastNotification(title: string, message: string, productId?: string): void {
+export function addBroadcastNotification(
+  title: string,
+  message: string,
+  productId?: string,
+  customId?: string
+): AppNotification {
   const current = getStoredNotifications();
+  if (productId) {
+    const existing = current.find(
+      (n) => n.productId === productId && (Date.now() - (n.timestamp || 0) < 300000)
+    );
+    if (existing) {
+      return existing;
+    }
+  }
   const newNotif: AppNotification = {
-    id: 'notif-' + Date.now(),
+    id: customId || ('notif-' + Date.now()),
     title,
     message,
     date: 'الآن',
     read: false,
     type: 'new_product',
     productId,
+    timestamp: Date.now(),
   };
   current.unshift(newNotif);
   saveNotifications(current);
+  return newNotif;
+}
+
+export function deleteStoredNotification(id: string): AppNotification[] {
+  const current = getStoredNotifications();
+  const updated = current.filter((n) => n.id !== id);
+  saveNotifications(updated);
+  return updated;
 }
 
 export function getStoredTheme(): 'light' | 'dark' {

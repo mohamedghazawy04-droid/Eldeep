@@ -23,6 +23,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Customer, LoyaltyTier } from '../types';
+import { openWhatsApp, formatWhatsAppUrl } from '../services/whatsapp';
 import {
   getStoredAllCustomers,
   saveCustomer,
@@ -133,10 +134,9 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
   const handleOpenWhatsApp = (cust: Customer) => {
     const cleanPhone = cust.phone.replace(/[^\d+]/g, '');
     const points = cust.points || 0;
-    const msg = encodeURIComponent(
-      `السلام عليكم أ / ${cust.name} 🌿\nمعك صيدلية الديب - خدمة العملاء.\nنحيطكم علماً بأن رصيد نقاط الولاء الخاص بكم في حسابكم لدينا هو: ${points} نقطة (تمنحك خصماً مباشراً بقيمة ${points} جنيه مصري عند طلبك القادم).\n\nيسعدنا خدمتكم وتجهيز وتوصيل طلباتكم دوماً على مدار 24 ساعة!`
-    );
-    window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
+    const msg = `السلام عليكم أ / ${cust.name} 🌿\nمعك صيدلية الديب - خدمة العملاء.\nنحيطكم علماً بأن رصيد نقاط الولاء الخاص بكم في حسابكم لدينا هو: ${points} نقطة (تمنحك خصماً مباشراً بقيمة ${points} جنيه مصري عند طلبك القادم).\n\nيسعدنا خدمتكم وتجهيز وتوصيل طلباتكم دوماً على مدار 24 ساعة!`;
+    const url = formatWhatsAppUrl(cleanPhone, msg);
+    openWhatsApp(url);
   };
 
   // Start Editing

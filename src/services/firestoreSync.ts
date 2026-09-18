@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   limit,
+  writeBatch,
 } from 'firebase/firestore';
 import { db, isFirebaseReady } from '../firebase';
 import { AppNotification, Customer, OrderRecord, PrescriptionOrder, Product } from '../types';
@@ -583,16 +584,18 @@ export function subscribeToFirestoreNotifications(
 export async function syncBroadcastNotificationToFirestore(
   title: string,
   message: string,
-  productId?: string
+  productId?: string,
+  customId?: string
 ): Promise<void> {
   const newNotif: AppNotification = {
-    id: 'notif-' + Date.now(),
+    id: customId || ('notif-' + Date.now()),
     title,
     message,
     date: 'الآن',
     read: false,
     type: 'new_product',
     productId,
+    timestamp: Date.now(),
   };
 
   if (!isFirebaseReady) return;
@@ -603,6 +606,37 @@ export async function syncBroadcastNotificationToFirestore(
     });
   } catch (err) {
     console.error('Failed to broadcast notification to Firestore:', err);
+  }
+}
+
+/**
+ * Mark notifications as read in Firestore
+ */
+export async function syncMarkNotificationsReadInFirestore(
+  notificationIds: string[]
+): Promise<void> {
+  if (!isFirebaseReady || !notificationIds || notificationIds.length === 0) return;
+  try {
+    const batch = writeBatch(db);
+    for (const id of notificationIds) {
+      const docRef = doc(db, NOTIFICATIONS_COL, id);
+      batch.update(docRef, { read: true });
+    }
+    await batch.commit();
+  } catch (err) {
+    console.warn('Failed to mark notifications read in Firestore:', err);
+  }
+}
+
+/**
+ * Delete a notification from Firestore
+ */
+export async function syncDeleteNotificationFromFirestore(id: string): Promise<void> {
+  if (!isFirebaseReady || !id) return;
+  try {
+    await deleteDoc(doc(db, NOTIFICATIONS_COL, id));
+  } catch (err) {
+    console.warn('Failed to delete notification from Firestore:', err);
   }
 }
 

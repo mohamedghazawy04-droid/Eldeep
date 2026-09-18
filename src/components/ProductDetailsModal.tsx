@@ -16,7 +16,8 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { Product } from '../types';
-import { createProductInquiryWhatsAppUrl } from '../services/whatsapp';
+import { isProductNew } from '../utils/productUtils';
+import { createProductInquiryWhatsAppUrl, openWhatsApp } from '../services/whatsapp';
 import { DosageCalculator } from './DosageCalculator';
 
 interface ProductDetailsModalProps {
@@ -48,7 +49,7 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
 
   const handleInquiry = () => {
     const url = createProductInquiryWhatsAppUrl(product);
-    window.open(url, '_blank');
+    openWhatsApp(url);
   };
 
   return (
@@ -105,11 +106,18 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
 
           {/* Title on Image */}
           <div className="absolute bottom-3 right-3 left-3 text-white text-right">
-            {product.requiresPrescription && (
-              <span className="inline-block bg-rose-600/90 text-white text-[11px] font-bold px-2 py-0.5 rounded-md mb-1.5 backdrop-blur-sm">
-                يلزم روشتة طبية
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+              {product.requiresPrescription && (
+                <span className="inline-block bg-rose-600/90 text-white text-[11px] font-bold px-2 py-0.5 rounded-md backdrop-blur-sm">
+                  يلزم روشتة طبية
+                </span>
+              )}
+              {isProductNew(product) && (
+                <span className="inline-block bg-sky-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-md backdrop-blur-sm shadow-sm">
+                  صنف جديد
+                </span>
+              )}
+            </div>
             <h3 className="font-extrabold text-lg sm:text-xl leading-snug drop-shadow-md">
               {product.nameAr}
             </h3>

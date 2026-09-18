@@ -14,7 +14,7 @@ import {
   Info,
 } from 'lucide-react';
 import { Product } from '../types';
-import { createDosageInquiryWhatsAppUrl } from '../services/whatsapp';
+import { createDosageInquiryWhatsAppUrl, openWhatsApp } from '../services/whatsapp';
 
 interface DosageCalculatorProps {
   product: Product;
@@ -501,7 +501,7 @@ export const DosageCalculator: React.FC<DosageCalculatorProps> = ({ product }) =
       `${calculation.singleDoseText} [معيار: ${calculation.systemTitle}]`,
       ageStageLabels[ageStage]
     );
-    window.open(url, '_blank');
+    openWhatsApp(url);
   };
 
   const quickWeights = [6, 10, 15, 20, 30, 50, 70];

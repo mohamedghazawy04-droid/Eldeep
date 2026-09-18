@@ -127,7 +127,7 @@ export function createOrderWhatsAppUrl(
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   message += `📍 شكراً لتسوقكم من صيدلية الديب. في انتظار تأكيد وتجهيز الطلب للتوصيل الفوري.`;
 
-  return `https://wa.me/${PHARMACY_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  return formatWhatsAppUrl(PHARMACY_WHATSAPP_NUMBER, message);
 }
 
 /**
@@ -185,7 +185,7 @@ export function createPrescriptionWhatsAppUrl(
     hasImageAttachment,
     viewUrl
   );
-  return `https://wa.me/${PHARMACY_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  return formatWhatsAppUrl(PHARMACY_WHATSAPP_NUMBER, message);
 }
 
 /**
@@ -193,7 +193,7 @@ export function createPrescriptionWhatsAppUrl(
  */
 export function createProductInquiryWhatsAppUrl(product: Product): string {
   const message = `مرحباً صيدلية الديب، أستفسر عن توفر دواء: *${product.nameAr}* (${product.nameEn}) بسعر ${product.price} ج.م. هل هو متاح للتوصيل الفوري؟`;
-  return `https://wa.me/${PHARMACY_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  return formatWhatsAppUrl(PHARMACY_WHATSAPP_NUMBER, message);
 }
 
 /**
@@ -214,7 +214,7 @@ export function createDosageInquiryWhatsAppUrl(
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   message += `دكتور صيدلي الديب، أرجو تأكيد صحة هذه الجرعة وتكرارها اليومي وطريقة تناولها المثلى. شكراً جزيلاً!`;
 
-  return `https://wa.me/${PHARMACY_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  return formatWhatsAppUrl(PHARMACY_WHATSAPP_NUMBER, message);
 }
 
 /**
@@ -222,5 +222,82 @@ export function createDosageInquiryWhatsAppUrl(
  */
 export function createConsultationWhatsAppUrl(): string {
   const message = `مرحباً دكتور، أرغب في استشارة صيدلانية وسؤال عن جرعات وتوفر أدوية في صيدلية الديب.`;
-  return `https://wa.me/${PHARMACY_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  return formatWhatsAppUrl(PHARMACY_WHATSAPP_NUMBER, message);
 }
+
+/**
+ * Detects if the current device is Apple iOS (iPhone, iPad, iPod)
+ */
+export function isIOS(): boolean {
+  if (typeof window === 'undefined') return false;
+  const ua = window.navigator.userAgent || '';
+  const isIosDevice = /iPhone|iPad|iPod/i.test(ua);
+  const isIpadOs = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return isIosDevice || isIpadOs;
+}
+
+/**
+ * Detects any mobile platform
+ */
+export function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    ) || isIOS()
+  );
+}
+
+/**
+ * Formats WhatsApp URL with maximum iOS and cross-platform compatibility
+ */
+export function formatWhatsAppUrl(phoneNumber: string, message: string): string {
+  const cleanPhone = phoneNumber.replace(/[^\d]/g, '');
+  const encoded = encodeURIComponent(message);
+  // api.whatsapp.com is recognized natively as an iOS Universal Link by Apple Safari
+  // and avoids 302-redirect drops that occur with wa.me on certain iOS Safari versions
+  return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encoded}`;
+}
+
+/**
+ * Robust WhatsApp launcher for iPhone (iOS), Android, and Desktop PC.
+ * - On iPhone: iOS Safari strictly blocks `window.open` inside asynchronous or timed callbacks,
+ *   and opens blank white tabs. Navigating via direct assignment or top anchor triggers
+ *   the native iOS WhatsApp app seamlessly.
+ * - On Desktop: opens in a new tab for seamless multi-tasking.
+ */
+export function openWhatsApp(url: string): void {
+  if (typeof window === 'undefined') return;
+
+  const onIOS = isIOS();
+  const onMobile = isMobileDevice();
+
+  if (onIOS || onMobile) {
+    try {
+      // Create a top anchor click to trigger iOS Universal Link cleanly without popup blocker
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_top';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
+      }, 500);
+    } catch {
+      window.location.href = url;
+    }
+  } else {
+    try {
+      const win = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!win || win.closed || typeof win.closed === 'undefined') {
+        window.location.href = url;
+      }
+    } catch {
+      window.location.href = url;
+    }
+  }
+}
+

@@ -131,9 +131,9 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
         {/* 5. WhatsApp Instant Contact */}
         <a
           id="mobile-nav-whatsapp"
-          href={`https://wa.me/${PHARMACY_WHATSAPP_NUMBER}`}
-          target="_blank"
-          rel="noreferrer"
+          href={`https://api.whatsapp.com/send?phone=${PHARMACY_WHATSAPP_NUMBER}`}
+          target="_top"
+          rel="noopener noreferrer"
           className="flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-teal-600 dark:text-teal-400 active:scale-95 transition-all min-w-[58px]"
         >
           <MessageCircle className="w-5 h-5 mb-0.5" />

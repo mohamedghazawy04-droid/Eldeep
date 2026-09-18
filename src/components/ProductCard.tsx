@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { ShoppingCart, Sparkles, Info, Pill, Plus, Maximize2 } from 'lucide-react';
 import { Product } from '../types';
+import { isProductNew } from '../utils/productUtils';
 
 interface ProductCardProps {
   product: Product;
@@ -57,7 +58,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               غير متوفر
             </span>
           )}
-          {product.isNew && (
+          {isProductNew(product) && (
             <span className="bg-sky-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
               جديد
             </span>

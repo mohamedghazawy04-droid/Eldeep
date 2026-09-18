@@ -95,9 +95,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <div className="flex items-center gap-3">
             <a
-              href={`https://wa.me/${PHARMACY_WHATSAPP_NUMBER}`}
+              href={`https://api.whatsapp.com/send?phone=${PHARMACY_WHATSAPP_NUMBER}`}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="flex items-center gap-1 hover:text-emerald-300 font-bold tracking-wider font-mono text-[11px] transition-colors"
             >
               <PhoneCall className="w-3 h-3" />

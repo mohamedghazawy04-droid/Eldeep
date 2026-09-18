@@ -19,9 +19,11 @@ import {
   FileText,
   ShieldCheck,
   Award,
+  ExternalLink,
+  Copy,
 } from 'lucide-react';
 import { CartItem, Customer, PaymentMethod } from '../types';
-import { createOrderWhatsAppUrl } from '../services/whatsapp';
+import { createOrderWhatsAppUrl, openWhatsApp } from '../services/whatsapp';
 import { saveOrder, saveCustomer, getStoredAllCustomers } from '../services/storage';
 import { syncSaveOrderToFirestore, syncSaveCustomerToFirestore } from '../services/firestoreSync';
 import { upsertSupabaseCustomer, upsertSupabaseOrder } from '../services/supabaseCustomers';
@@ -57,6 +59,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [orderNotes, setOrderNotes] = useState('');
   const [isOrdered, setIsOrdered] = useState(false);
+  const [submittedWaUrl, setSubmittedWaUrl] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
 
   // Form validation errors
   const [errors, setErrors] = useState<{ name?: string; phone?: string; address?: string }>({});
@@ -272,6 +276,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     });
 
     setIsOrdered(true);
+    setSubmittedWaUrl(waUrl);
+
     try {
       confetti({
         particleCount: 90,
@@ -282,10 +288,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       // ignore
     }
 
-    setTimeout(() => {
-      window.open(waUrl, '_blank');
-      onClearCart();
-    }, 1000);
+    // Call openWhatsApp immediately so iPhone Safari and mobile browsers don't block the pop-up
+    openWhatsApp(waUrl);
+    onClearCart();
   };
 
   return (
@@ -335,28 +340,51 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {/* Content */}
         {isOrdered ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-4 shadow-lg">
+            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-3 shadow-lg">
               <CheckCircle className="w-10 h-10" />
             </div>
             <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
               تم تحويل طلبك لصيدلية الديب بنجاح!
             </h4>
-            <p className="text-sm text-slate-600 dark:text-slate-400 max-w-xs mb-3">
-              تم فتح الواتساب برقم الصيدلية (+201009097378) مع تفاصيل الطلب وبيانات التوصيل وحساب نقاط الولاء.
+            <p className="text-xs text-slate-600 dark:text-slate-400 max-w-xs mb-3 leading-relaxed">
+              تم إرسال تفاصيل الأصناف وحساب نقاط الولاء إلى رقم واتساب صيدلية الديب (+201009097378).
             </p>
             {pointsDiscount > 0 && (
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-300 dark:border-emerald-800 mb-6 text-xs text-emerald-800 dark:text-emerald-300 font-bold">
+              <div className="w-full p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-300 dark:border-emerald-800 mb-4 text-xs text-emerald-800 dark:text-emerald-300 font-bold">
                 🎉 تم خصم {pointsDiscount} جنيه من الفاتورة مقابل نقاط الولاء!
               </div>
             )}
+
+            {/* Direct WhatsApp Action Button for iPhone and All Browsers */}
+            {submittedWaUrl && (
+              <div className="w-full space-y-2 mb-4">
+                <a
+                  id="cart-direct-whatsapp-btn"
+                  href={submittedWaUrl}
+                  target="_top"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-xs sm:text-sm shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                >
+                  <Send className="w-4 h-4 rotate-180" />
+                  <span>فتح محادثة الواتساب الآن (+201009097378)</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
+                  📱 لمستخدمي أجهزة الآيفون: إذا لم يفتح الواتساب تلقائياً، اضغط على الزر الأخضر أعلاه لفتح المحادثة مباشرة.
+                </p>
+              </div>
+            )}
+
             <button
               onClick={() => {
                 setIsOrdered(false);
+                setSubmittedWaUrl('');
                 onClose();
               }}
-              className="bg-sky-600 hover:bg-sky-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs shadow-md transition-colors"
+              className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-xl font-bold text-xs transition-colors"
             >
-              متابعة التسوق
+              متابعة التسوق وإغلاق السلة
             </button>
           </div>
         ) : items.length === 0 ? (

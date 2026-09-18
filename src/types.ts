@@ -24,6 +24,7 @@ export interface Product {
   image: string;
   tags?: string[];
   isNew?: boolean;
+  createdAt?: number | string; // وقت وتاريخ إضافة الصنف للمتجر
   stockQuantity?: number; // كمية المخزون المتبقية
   isLowStock?: boolean; // أوشك على النفاذ
   isComingSoon?: boolean; // قريباً في الصيدلية
@@ -69,6 +70,7 @@ export interface AppNotification {
   read: boolean;
   type: 'new_product' | 'loyalty' | 'offer';
   productId?: string;
+  timestamp?: number;
 }
 
 export type PaymentMethod = 'cash' | 'instapay' | 'visa';
