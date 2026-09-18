@@ -1,12 +1,23 @@
 import { Customer, OrderRecord, Product } from '../types';
-import { getStoredAllCustomers, getStoredOrders, getStoredProducts, saveProducts } from './storage';
-import { syncBatchUploadProductsToFirestore } from './firestoreSync';
+import {
+  getStoredAllCustomers,
+  getStoredOrders,
+  getStoredProducts,
+  saveProducts,
+  saveAllCustomers,
+  calculateTier,
+} from './storage';
+import {
+  syncBatchUploadProductsToFirestore,
+  syncBatchUploadCustomersToFirestore,
+} from './firestoreSync';
 
 export interface GitHubBackupConfig {
   enabled: boolean;
-  repo: string; // e.g. "mohamedhgas4444/eldeeb-pharmacy-backup"
+  repo: string; // e.g. "mohamedghazawy04-droid/Eldeep"
   branch: string; // e.g. "main"
   filePath: string; // e.g. "eldeeb_pharmacy_backup.json"
+  customerFilePath?: string; // e.g. "eldeeb_customers_backup.json"
   token: string; // Personal Access Token (classic or fine-grained)
   gistId: string; // Optional: GitHub Gist ID
   rawUrl: string; // Optional: Direct raw URL
@@ -14,6 +25,9 @@ export interface GitHubBackupConfig {
   lastBackupAt?: string;
   lastBackupStatus?: 'success' | 'error' | 'idle';
   lastBackupMessage?: string;
+  lastCustomerBackupAt?: string;
+  lastCustomerBackupStatus?: 'success' | 'error' | 'idle';
+  lastCustomerBackupMessage?: string;
 }
 
 const GITHUB_CONFIG_KEY = 'eldeeb_github_backup_config_v1';
@@ -23,11 +37,13 @@ const DEFAULT_CONFIG: GitHubBackupConfig = {
   repo: 'mohamedghazawy04-droid/Eldeep',
   branch: 'main',
   filePath: 'eldeeb_pharmacy_backup.json',
+  customerFilePath: 'eldeeb_customers_backup.json',
   token: '',
   gistId: '',
   rawUrl: '',
   autoSync: true,
   lastBackupStatus: 'idle',
+  lastCustomerBackupStatus: 'idle',
 };
 
 /**
@@ -116,26 +132,59 @@ export interface BackupPayload {
   timestamp: string;
   pharmacyName: string;
   totalProducts: number;
+  totalCustomers?: number;
   products: Product[];
   orders?: OrderRecord[];
   customers?: Customer[];
 }
 
+export interface CustomerBackupPayload {
+  version: string;
+  timestamp: string;
+  pharmacyName: string;
+  totalCustomers: number;
+  totalLoyaltyPoints: number;
+  customers: Customer[];
+}
+
 /**
- * Generates formatted backup payload
+ * Generates formatted backup payload for the entire pharmacy system
  */
-export function generateBackupPayload(customProducts?: Product[]): BackupPayload {
+export function generateBackupPayload(
+  customProducts?: Product[],
+  customCustomers?: Customer[]
+): BackupPayload {
   const prods = customProducts || getStoredProducts();
   const orders = getStoredOrders();
-  const customers = getStoredAllCustomers();
+  const customers = customCustomers || getStoredAllCustomers();
 
   return {
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     pharmacyName: 'صيدلية الديب - ElDeeb Pharmacy',
     totalProducts: prods.length,
+    totalCustomers: customers.length,
     products: prods,
     orders,
+    customers,
+  };
+}
+
+/**
+ * Generates dedicated customer accounts & loyalty points backup payload
+ */
+export function generateCustomersBackupPayload(
+  customCustomers?: Customer[]
+): CustomerBackupPayload {
+  const customers = customCustomers || getStoredAllCustomers();
+  const totalLoyaltyPoints = customers.reduce((sum, c) => sum + (c.points || 0), 0);
+
+  return {
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    pharmacyName: 'صيدلية الديب - ElDeeb Pharmacy',
+    totalCustomers: customers.length,
+    totalLoyaltyPoints,
     customers,
   };
 }

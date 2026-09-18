@@ -89,7 +89,18 @@ export function getStoredProducts(): Product[] {
     if (saved) {
       const parsed: Product[] = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const calibrated = ensureProductLoyaltySystem(parsed);
+        // Automatically enrich with missing catalog items if previously limited (e.g. old 36 items)
+        let enriched = parsed;
+        if (INITIAL_PRODUCTS && parsed.length < INITIAL_PRODUCTS.length) {
+          const existingIds = new Set(parsed.map((p) => p.id));
+          const missingCatalogProducts = INITIAL_PRODUCTS.filter((p) => !existingIds.has(p.id));
+          if (missingCatalogProducts.length > 0) {
+            enriched = [...parsed, ...missingCatalogProducts];
+            saveProductsToLocalStorage(enriched);
+            setIdbItem(STORAGE_KEYS.PRODUCTS, enriched).catch(() => {});
+          }
+        }
+        const calibrated = ensureProductLoyaltySystem(enriched);
         memoryProductsCache = calibrated;
         return calibrated;
       }
@@ -117,7 +128,17 @@ export async function loadProductsFromIndexedDb(): Promise<Product[] | null> {
   try {
     const idbProducts = await getIdbItem<Product[]>(STORAGE_KEYS.PRODUCTS);
     if (idbProducts && Array.isArray(idbProducts) && idbProducts.length > 0) {
-      const calibrated = ensureProductLoyaltySystem(idbProducts);
+      let enriched = idbProducts;
+      if (INITIAL_PRODUCTS && idbProducts.length < INITIAL_PRODUCTS.length) {
+        const existingIds = new Set(idbProducts.map((p) => p.id));
+        const missingCatalogProducts = INITIAL_PRODUCTS.filter((p) => !existingIds.has(p.id));
+        if (missingCatalogProducts.length > 0) {
+          enriched = [...idbProducts, ...missingCatalogProducts];
+          saveProductsToLocalStorage(enriched);
+          setIdbItem(STORAGE_KEYS.PRODUCTS, enriched).catch(() => {});
+        }
+      }
+      const calibrated = ensureProductLoyaltySystem(enriched);
       memoryProductsCache = calibrated;
       return calibrated;
     }

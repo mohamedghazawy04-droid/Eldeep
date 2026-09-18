@@ -133,7 +133,7 @@ export async function syncAddProductToFirestore(
 }
 
 /**
- * Batch upload multiple Products to Firestore Cloud Database
+ * Batch upload multiple Products to Firestore Cloud Database using writeBatch
  */
 export async function syncBatchUploadProductsToFirestore(
   products: Product[]
@@ -145,14 +145,23 @@ export async function syncBatchUploadProductsToFirestore(
 
   let count = 0;
   try {
-    for (const product of products) {
-      const cleanProduct = sanitizeForFirestore(product);
-      await setDoc(doc(db, PRODUCTS_COL, product.id), cleanProduct, { merge: true });
-      count++;
+    // Firestore supports up to 500 writes in a single batch
+    const BATCH_LIMIT = 250;
+    for (let i = 0; i < products.length; i += BATCH_LIMIT) {
+      const chunk = products.slice(i, i + BATCH_LIMIT);
+      const batch = writeBatch(db);
+      for (const product of chunk) {
+        const cleanProduct = sanitizeForFirestore(product);
+        batch.set(doc(db, PRODUCTS_COL, product.id), cleanProduct, { merge: true });
+      }
+      await batch.commit();
+      count += chunk.length;
     }
     return { successCount: count };
   } catch (err: any) {
-    console.error('Batch upload partial error:', err);
+    console.error('Batch upload error:', err);
+    // Fallback save to localStorage & IndexedDB in case of network issue
+    saveProducts(products);
     return { successCount: count, error: err?.message || 'خطأ أثناء رفع بعض المنتجات' };
   }
 }
@@ -427,6 +436,51 @@ export async function syncSaveCustomerToFirestore(
   } catch (err: any) {
     console.error('Failed to save customer to Firestore:', err);
     return { success: false, isOnline: false, error: err?.message || 'خطأ في الحفظ السحابي' };
+  }
+}
+
+/**
+ * Batch upload multiple Customers to Firestore Cloud Database using writeBatch
+ */
+export async function syncBatchUploadCustomersToFirestore(
+  customers: Customer[]
+): Promise<{ successCount: number; error?: string }> {
+  if (!isFirebaseReady) {
+    saveAllCustomers(customers);
+    return { successCount: customers.length };
+  }
+
+  let count = 0;
+  try {
+    const BATCH_LIMIT = 250;
+    for (let i = 0; i < customers.length; i += BATCH_LIMIT) {
+      const chunk = customers.slice(i, i + BATCH_LIMIT);
+      const batch = writeBatch(db);
+      for (const cust of chunk) {
+        const cleanPhoneDigits = (cust.phone || '').replace(/[^\d+]/g, '');
+        const docId =
+          cleanPhoneDigits.length >= 7
+            ? cleanPhoneDigits
+            : cust.email
+            ? 'em_' + cust.email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')
+            : cust.id;
+        const cleanCustomer = sanitizeForFirestore({
+          ...cust,
+          points: cust.points || 0,
+          tier: cust.tier || calculateTier(cust.points || 0),
+          lastUpdated: new Date().toISOString(),
+        });
+        batch.set(doc(db, CUSTOMERS_COL, docId), cleanCustomer, { merge: true });
+      }
+      await batch.commit();
+      count += chunk.length;
+    }
+    saveAllCustomers(customers);
+    return { successCount: count };
+  } catch (err: any) {
+    console.error('Batch customer upload error:', err);
+    saveAllCustomers(customers);
+    return { successCount: count, error: err?.message || 'خطأ أثناء رفع بعض بيانات العملاء' };
   }
 }
 

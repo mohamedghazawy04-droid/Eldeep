@@ -459,31 +459,37 @@ export default function App() {
     await syncClearAllFirestoreProducts();
   };
 
-  const handleBatchImportProducts = async (imported: Product[]) => {
+  const handleBatchImportProducts = async (imported: Product[]): Promise<number> => {
     const now = Date.now();
     const mappedImported = imported.map((p) => ({
       ...p,
       isNew: p.isNew !== undefined ? p.isNew : true,
       createdAt: p.createdAt || now,
     }));
-    const map = new Map<string, Product>();
-    products.forEach((p) => map.set(p.id, p));
-    mappedImported.forEach((p) => map.set(p.id, p));
-    const merged = Array.from(map.values());
-    setProducts(merged);
-    saveProducts(merged);
-    triggerDebouncedGitHubAutoSync(merged);
+    
+    let totalCount = 0;
+    setProducts((prev) => {
+      const map = new Map<string, Product>();
+      prev.forEach((p) => map.set(p.id, p));
+      mappedImported.forEach((p) => map.set(p.id, p));
+      const merged = Array.from(map.values());
+      totalCount = merged.length;
+      saveProducts(merged);
+      triggerDebouncedGitHubAutoSync(merged);
+      return merged;
+    });
 
     // Broadcast summary notification
     if (mappedImported.length > 0) {
       handleBroadcastNotification(
-        `📦 تم توفير أصناف جديدة بالصيدلية (${mappedImported.length})`,
-        `تمت إضافة ${mappedImported.length} صنف ومنتج طبي جديد إلى قائمة الصيدلية. تصفح الأقسام الآن!`
+        `📦 تم توفير أصناف صيدلية جديدة (${mappedImported.length} صنف)`,
+        `تم تحديث وتوفير باقة من الأصناف الأكثر طلباً ومبيعاً في الصيدلية بنجاح. تصفح الأقسام الآن!`
       );
     }
 
     await syncBatchUploadProductsToFirestore(mappedImported);
     await upsertSupabaseProducts(mappedImported).catch(() => {});
+    return totalCount;
   };
 
   const handleBroadcastNotification = (title: string, message: string, productId?: string) => {
