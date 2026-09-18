@@ -350,6 +350,23 @@ export function subscribeToFirestorePrescriptions(
 }
 
 /**
+ * Fetch a single prescription by ID from Firestore
+ */
+export async function fetchPrescriptionFromFirestore(rxId: string): Promise<PrescriptionOrder | null> {
+  if (!isFirebaseReady) return null;
+  try {
+    const docRef = doc(db, PRESCRIPTIONS_COL, rxId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data() as PrescriptionOrder;
+    }
+  } catch (err) {
+    console.warn('Error fetching prescription from Firestore:', err);
+  }
+  return null;
+}
+
+/**
  * Save or Update Customer in Firestore
  * Connects any customer who registers or places an order directly to the Firestore customers collection
  */

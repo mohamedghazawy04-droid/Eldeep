@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Upload, Camera, FileText, Send, CheckCircle2, Phone, User, MapPin } from 'lucide-react';
+import { X, Upload, Camera, FileText, Send, CheckCircle2, Phone, User, MapPin, Share2, Download, ExternalLink, Copy } from 'lucide-react';
 import { Customer, PrescriptionOrder } from '../types';
 import { createPrescriptionWhatsAppUrl } from '../services/whatsapp';
 import { savePrescription } from '../services/storage';
@@ -27,6 +27,9 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [submittedRx, setSubmittedRx] = useState<PrescriptionOrder | null>(null);
+  const [submittedWaUrl, setSubmittedWaUrl] = useState<string>('');
+  const [isCopied, setIsCopied] = useState(false);
 
   const [isCapturingLive, setIsCapturingLive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -182,14 +185,19 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
       onPrescriptionSubmitted(newPrescription);
     }
 
-    // Launch WhatsApp directly to pharmacy phone
+    // Launch WhatsApp directly to pharmacy phone with image preview link
+    const rxViewUrl = `${window.location.origin}/?rx=${newPrescription.id}`;
     const waUrl = createPrescriptionWhatsAppUrl(
       patientName,
       patientPhone,
       patientAddress,
       notes,
-      Boolean(imagePreview)
+      Boolean(imagePreview),
+      rxViewUrl
     );
+
+    setSubmittedRx(newPrescription);
+    setSubmittedWaUrl(waUrl);
 
     setIsSubmitting(false);
     setIsSuccess(true);
@@ -210,10 +218,44 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
     }, 800);
   };
 
+  const handleShareImageFile = async () => {
+    if (!submittedRx?.imageUrl) return;
+    try {
+      const res = await fetch(submittedRx.imageUrl);
+      const blob = await res.blob();
+      const file = new File([blob], 'prescription.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'روشتة طبية - صيدلية الديب',
+          text: `روشتة طبية للمريض: ${submittedRx.customerName}`,
+        });
+        return;
+      }
+    } catch (err) {
+      console.warn('Web share not supported or failed:', err);
+    }
+    // Fallback: open full image in new tab
+    window.open(submittedRx.imageUrl, '_blank');
+  };
+
+  const handleDownloadImage = () => {
+    if (!submittedRx?.imageUrl) return;
+    const a = document.createElement('a');
+    a.href = submittedRx.imageUrl;
+    a.download = `prescription-${submittedRx.id}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const resetForm = () => {
     setImagePreview(null);
     setNotes('');
     setIsSuccess(false);
+    setSubmittedRx(null);
+    setSubmittedWaUrl('');
+    setIsCopied(false);
     onClose();
   };
 
@@ -253,23 +295,90 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
         {/* Content */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           {isSuccess ? (
-            <div className="py-8 text-center flex flex-col items-center">
-              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-4">
+            <div className="py-4 text-center flex flex-col items-center space-y-4">
+              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center shadow-inner">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
-              <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                تم تجهيز الروشتة وإرسالها للصيدلية!
-              </h4>
-              <p className="text-sm text-slate-600 dark:text-slate-300 max-w-sm mb-6 leading-relaxed">
-                تم تحويل تفاصيل الروشتة مباشرة إلى رقم هاتف صيدلية الديب (+201009097378) عبر الواتساب، وسيقوم الصيدلي بمراجعتها وتأكيد السعر وموعد التوصيل.
-              </p>
-              <button
-                id="done-prescription-btn"
-                onClick={resetForm}
-                className="bg-sky-600 hover:bg-sky-700 text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-md transition-colors"
-              >
-                تم، إغلاق النافذة
-              </button>
+              <div>
+                <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+                  تم تجهيز الروشتة وإرسالها للصيدلية بنجاح!
+                </h4>
+                <p className="text-xs text-slate-600 dark:text-slate-300 max-w-sm mx-auto leading-relaxed">
+                  تم إرسال كافة تفاصيل الروشتة مع رابط المعاينة الكامل إلى رقم واتساب صيدلية الديب (+201009097378).
+                </p>
+              </div>
+
+              {/* Attached Image Preview & Direct Share Controls */}
+              {submittedRx?.imageUrl && (
+                <div className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 space-y-3 text-right">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200">
+                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                      <Camera className="w-4 h-4" />
+                      <span>صورة الروشتة الأصلية المحفوظة بالطلب:</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => window.open(submittedRx.imageUrl, '_blank')}
+                      className="text-[11px] text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 font-bold"
+                    >
+                      <span>تكبير بالحجم الكامل</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-900 max-h-56 flex items-center justify-center group">
+                    <img
+                      src={submittedRx.imageUrl}
+                      alt="الروشتة"
+                      className="w-full h-auto max-h-56 object-contain"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleShareImageFile}
+                      className="py-2.5 px-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>مشاركة الصورة لواتساب</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadImage}
+                      className="py-2.5 px-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>حفظ الصورة بجهازك</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center leading-normal">
+                    💡 يتضمن نص رسالة الواتساب رابطاً مباشراً يفتح للصيدلي الصورة كاملة وبأعلى دقة، كما يمكنك إرسال الصورة المحفوظة في المحادثة مباشرة.
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="w-full flex flex-col gap-2 pt-2">
+                {submittedWaUrl && (
+                  <a
+                    href={submittedWaUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 active:scale-95"
+                  >
+                    <span>فتح محادثة الواتساب وتأكيد الطلب الآن</span>
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                )}
+                <button
+                  id="done-prescription-btn"
+                  onClick={resetForm}
+                  className="w-full py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-bold text-xs transition-colors"
+                >
+                  تم، إغلاق النافذة
+                </button>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">

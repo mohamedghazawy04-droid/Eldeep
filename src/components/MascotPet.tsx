@@ -19,8 +19,24 @@ export const MascotPet: React.FC<MascotPetProps> = ({
   const [speech, setSpeech] = useState<string>('');
   const [showSpeech, setShowSpeech] = useState<boolean>(true);
   const [clickCount, setClickCount] = useState<number>(0);
-  const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const [isDismissed, setIsDismissed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('eldeeb_debo_session_closed') === 'true';
+    }
+    return false;
+  });
   const [rewardClaimed, setRewardClaimed] = useState<boolean>(false);
+
+  // Close and hide Debo completely for the current session
+  const handleCloseDebo = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setIsDismissed(true);
+    try {
+      sessionStorage.setItem('eldeeb_debo_session_closed', 'true');
+    } catch {
+      // ignore
+    }
+  };
 
   // Initialize with the daily verified tip on mount
   useEffect(() => {
@@ -89,27 +105,15 @@ export const MascotPet: React.FC<MascotPetProps> = ({
     }, 2800);
   };
 
-  if (isMinimized) {
-    return (
-      <button
-        id="mascot-restore-btn"
-        onClick={() => {
-          setIsMinimized(false);
-          setShowSpeech(true);
-        }}
-        className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-40 bg-gradient-to-r from-sky-500 to-blue-600 text-white p-2.5 rounded-full shadow-lg hover:scale-110 active:scale-95 transition-transform flex items-center gap-1.5 text-xs font-bold font-cairo border-2 border-white dark:border-slate-800"
-        title="إظهار ديبو الصيدلي"
-      >
-        <span className="text-lg">🐺</span>
-        <span className="hidden sm:inline">ديبو</span>
-      </button>
-    );
+  // If closed by user, don't show until app is opened anew
+  if (isDismissed) {
+    return null;
   }
 
   return (
     <div
       id="pharmacy-mascot-container"
-      className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-40 pointer-events-none select-none"
+      className="fixed bottom-24 sm:bottom-10 left-4 sm:left-6 z-40 pointer-events-none select-none animate-in fade-in slide-in-from-bottom-5 duration-300"
     >
       <div className="relative pointer-events-auto flex flex-col items-start">
         {/* Speech Bubble */}
@@ -139,12 +143,9 @@ export const MascotPet: React.FC<MascotPetProps> = ({
                     <RefreshCw className="w-3 h-3" />
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowSpeech(false);
-                    }}
-                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                    title="إغلاق التلميح"
+                    onClick={handleCloseDebo}
+                    className="text-slate-400 hover:text-rose-500 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                    title="إغلاق ديبو نهائياً حتى فتح التطبيق من جديد"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -159,10 +160,13 @@ export const MascotPet: React.FC<MascotPetProps> = ({
               </p>
 
               <div className="mt-2 pt-1.5 flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-400 border-t border-slate-100 dark:border-slate-700/40">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-2.5 h-2.5 text-sky-500" />
-                  <span>تحديث يومي مستمر</span>
-                </span>
+                <button
+                  onClick={handleCloseDebo}
+                  className="text-slate-400 hover:text-rose-500 underline"
+                  title="إخفاء حتى فتح التطبيق من جديد"
+                >
+                  إخفاء ديبو
+                </button>
                 <button
                   onClick={handleNextTip}
                   className="font-bold text-sky-600 dark:text-sky-400 hover:underline"
@@ -279,14 +283,11 @@ export const MascotPet: React.FC<MascotPetProps> = ({
             </div>
           </div>
 
-          {/* Minimize button */}
+          {/* Close Debo button */}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsMinimized(true);
-            }}
-            className="absolute -top-1 -left-1 bg-slate-200 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-full p-1 shadow-sm transition-colors text-[9px]"
-            title="تصغير ديبو"
+            onClick={handleCloseDebo}
+            className="absolute -top-1 -left-1 bg-slate-200 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-full p-1 shadow-md transition-all text-[9px] hover:scale-110 active:scale-95"
+            title="إغلاق ديبو (إخفاء حتى فتح التطبيق من جديد)"
           >
             <X className="w-2.5 h-2.5" />
           </button>

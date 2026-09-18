@@ -56,6 +56,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { CartDropAnimation, CartDropPayload } from './components/CartDropAnimation';
 import { FlyToCartAnimation, FlyingProductItem } from './components/FlyToCartAnimation';
 import { PrescriptionModal } from './components/PrescriptionModal';
+import { PrescriptionViewModal } from './components/PrescriptionViewModal';
 import { LoyaltyModal } from './components/LoyaltyModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { AdminModal } from './components/AdminModal';
@@ -93,6 +94,13 @@ export default function App() {
   const [allCustomers, setAllCustomers] = useState<Customer[]>(getStoredAllCustomers);
   const [notifications, setNotifications] = useState<AppNotification[]>(getStoredNotifications);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => getStoredTheme() === 'dark');
+  const [viewingRxId, setViewingRxId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('rx');
+    }
+    return null;
+  });
 
   // Multi-view routing: Customer Store vs Standalone Admin Portal & App Hub
   const [viewMode, setViewMode] = useState<'store' | 'admin'>(() => {
@@ -880,6 +888,22 @@ export default function App() {
             isOpen={isPrescriptionOpen}
             onClose={() => setIsPrescriptionOpen(false)}
             activeCustomer={activeCustomer}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {viewingRxId && (
+          <PrescriptionViewModal
+            rxId={viewingRxId}
+            onClose={() => {
+              setViewingRxId(null);
+              if (typeof window !== 'undefined') {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('rx');
+                window.history.replaceState({}, '', url.toString());
+              }
+            }}
           />
         )}
       </AnimatePresence>

@@ -131,14 +131,15 @@ export function createOrderWhatsAppUrl(
 }
 
 /**
- * Creates WhatsApp URL for sending a prescription
+ * Creates WhatsApp message text for a prescription
  */
-export function createPrescriptionWhatsAppUrl(
+export function createPrescriptionMessageText(
   customerName: string,
   customerPhone: string,
   customerAddress: string,
   notes: string,
-  hasImageAttachment: boolean
+  hasImageAttachment: boolean,
+  viewUrl?: string
 ): string {
   let message = `🩺 *روشتة طبية جديدة مرسلة من الموقع - صيدلية الديب*\n`;
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -152,13 +153,38 @@ export function createPrescriptionWhatsAppUrl(
     message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   }
   if (hasImageAttachment) {
-    message += `📸 *مرفق صورة الروشتة في هذه المحادثة (يرجى مراجعة الصورة وتأكيد توفر الأدوية والبدائل والجرعات)*\n`;
+    message += `🖼️ *صورة الروشتة مصورة ومرفقة بالطلب:*\n`;
+    if (viewUrl) {
+      message += `🔗 *اضغط هنا لفتح وتكبير صورة الروشتة الأصلية كاملة:*\n${viewUrl}\n`;
+    }
+    message += `📸 (تم أيضاً حفظ ونسخ الصورة الأصلية لإرسالها في المحادثة مباشرة)\n`;
   } else {
     message += `💊 يرجى تجهيز الأدوية المطلوبة حسب الملاحظات الموضحة أعلاه.\n`;
   }
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   message += `برجاء إفادتي بالسعر الإجمالي وميعاد التوصيل. شكراً لكم!`;
+  return message;
+}
 
+/**
+ * Creates WhatsApp URL for sending a prescription
+ */
+export function createPrescriptionWhatsAppUrl(
+  customerName: string,
+  customerPhone: string,
+  customerAddress: string,
+  notes: string,
+  hasImageAttachment: boolean,
+  viewUrl?: string
+): string {
+  const message = createPrescriptionMessageText(
+    customerName,
+    customerPhone,
+    customerAddress,
+    notes,
+    hasImageAttachment,
+    viewUrl
+  );
   return `https://wa.me/${PHARMACY_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 }
 

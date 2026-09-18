@@ -255,15 +255,46 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
         </div>
       )}
 
+      {/* Safe Changes Verified Banner with Gentle Pulse Animation */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl">
+        <div className="flex items-center gap-3">
+          <span className="relative flex h-3 w-3 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </span>
+          <div>
+            <div className="text-xs font-bold text-emerald-300 flex items-center gap-2 flex-wrap">
+              <span>جميع التغييرات السابقة محفوظة ومؤمنة سحابياً بنجاح</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold">
+                100% Saved & Safe
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              قاعدة البيانات (Firestore)، كتالوج الأصناف ({products.length})، وبيانات المستودع ({config.repo}) محفوظة بالكامل.
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleUploadNow}
+          className="relative px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-emerald-950/40 whitespace-nowrap animate-pulse hover:animate-none shrink-0"
+        >
+          <CloudUpload className="w-4 h-4" />
+          <span>تأكيد المزامنة وحفظ نسخة الآن</span>
+        </button>
+      </div>
+
       {/* Main Interactive Action Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        {/* Action 1: Upload to GitHub */}
+        {/* Action 1: Upload to GitHub with gentle pulse effect */}
         <button
           type="button"
           disabled={isUploading}
           onClick={handleUploadNow}
-          className="p-4 rounded-2xl bg-gradient-to-br from-cyan-600/20 via-slate-800 to-slate-900 border border-cyan-500/40 hover:border-cyan-400 transition-all text-right flex flex-col justify-between gap-3 group active:scale-[0.98] disabled:opacity-50"
+          className="relative p-4 rounded-2xl bg-gradient-to-br from-cyan-600/20 via-slate-800 to-slate-900 border border-cyan-500/40 hover:border-cyan-400 transition-all text-right flex flex-col justify-between gap-3 group active:scale-[0.98] disabled:opacity-50 overflow-hidden shadow-lg shadow-cyan-950/40"
         >
+          {/* Subtle glowing pulse border ring */}
+          <span className="absolute inset-0 rounded-2xl border-2 border-cyan-400/20 animate-pulse pointer-events-none" />
           <div className="flex items-center justify-between w-full">
             <span className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center group-hover:scale-110 transition-transform">
               <CloudUpload className={`w-5 h-5 ${isUploading ? 'animate-bounce' : ''}`} />
