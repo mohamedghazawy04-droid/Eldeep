@@ -57,23 +57,31 @@ export async function fetchSupabaseProducts(includeUnavailable = false): Promise
   const pageSize = 1000;
   const rows: SupabaseProductRow[] = [];
   for (let offset = 0; ; offset += pageSize) {
-    let query = supabase
-      .from(TABLE)
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .range(offset, offset + pageSize - 1);
-    if (!includeUnavailable) {
-      query = query.eq('in_stock', true).eq('is_coming_soon', false);
-    }
-    const { data, error } = await query;
-    if (error) {
-      console.warn('Supabase products read failed:', error.message);
+    const page = await fetchSupabaseProductPage(offset, pageSize, includeUnavailable);
+    if (page.error) {
+      console.warn('Supabase products read failed:', page.error);
       return null;
     }
+    const data = page.data;
     rows.push(...((data || []) as SupabaseProductRow[]));
     if (!data || data.length < pageSize) break;
   }
   return rows.map((row) => supabaseRowToProduct(row));
+}
+
+async function fetchSupabaseProductPage(
+  offset: number,
+  pageSize: number,
+  includeUnavailable: boolean
+): Promise<{ data: SupabaseProductRow[]; error?: string }> {
+  let query = supabase
+    .from(TABLE)
+    .select('*')
+    .order('updated_at', { ascending: false })
+    .range(offset, offset + pageSize - 1);
+  if (!includeUnavailable) query = query.eq('in_stock', true).eq('is_coming_soon', false);
+  const { data, error } = await query;
+  return { data: (data || []) as SupabaseProductRow[], error: error?.message };
 }
 
 export async function upsertSupabaseProduct(product: Product): Promise<{ success: boolean; error?: string }> {
@@ -94,9 +102,22 @@ export function subscribeToSupabaseProducts(
 ): () => void {
   if (!isSupabaseReady) return () => {};
   let active = true;
-  fetchSupabaseProducts(includeUnavailable).then((products) => {
-    if (active && products) onUpdate(products);
-  });
+  const load = async () => {
+    if (!includeUnavailable) {
+      const products = await fetchSupabaseProducts(false);
+      if (active && products) onUpdate(products);
+      return;
+    }
+    const allRows: SupabaseProductRow[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const page = await fetchSupabaseProductPage(offset, 1000, true);
+      if (page.error) return;
+      allRows.push(...page.data);
+      if (active) onUpdate(allRows.map((row) => supabaseRowToProduct(row)));
+      if (page.data.length < 1000) break;
+    }
+  };
+  load().catch((error) => console.warn('Supabase catalog stream failed:', error));
   const channel = supabase
     .channel('public-products-catalog')
     .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, () => {
