@@ -75,6 +75,7 @@ import {
   upsertSupabaseProducts,
 } from './services/supabaseProducts';
 import { upsertSupabaseCustomer } from './services/supabaseCustomers';
+import { uploadProductImage } from './services/supabaseStorage';
 import { triggerDebouncedGitHubAutoSync, restoreFromGitHubBackup } from './services/githubBackup';
 
 export default function App() {
@@ -406,9 +407,12 @@ export default function App() {
 
   // Admin handlers
   const handleAddProduct = async (newProd: Product) => {
+    const uploaded = await uploadProductImage(newProd.image, newProd.id);
+    if (!uploaded.success) return { success: false, isOnline: false, error: uploaded.error };
     const now = Date.now();
     const productWithMeta: Product = {
       ...newProd,
+      image: uploaded.url,
       isNew: true,
       createdAt: newProd.createdAt || now,
     };
@@ -423,12 +427,8 @@ export default function App() {
     handleBroadcastNotification(notifTitle, notifMsg, productWithMeta.id);
 
     // Guarantee authoritative Firestore save and mirror to Supabase
-    const [fsRes] = await Promise.allSettled([
-      syncAddProductToFirestore(productWithMeta),
-      upsertSupabaseProduct(productWithMeta),
-    ]);
-    const isOnline = fsRes.status === 'fulfilled' && fsRes.value.success;
-    return { success: true, isOnline };
+    const result = await upsertSupabaseProduct(productWithMeta);
+    return { success: result.success, isOnline: result.success, error: result.error };
   };
 
   const handleDeleteProduct = (id: string) => {
@@ -441,17 +441,16 @@ export default function App() {
   };
 
   const handleUpdateProduct = async (updatedProd: Product) => {
+    const uploaded = await uploadProductImage(updatedProd.image, updatedProd.id);
+    if (!uploaded.success) return { success: false, isOnline: false, error: uploaded.error };
+    updatedProd = { ...updatedProd, image: uploaded.url };
     const updated = products.map((p) => (p.id === updatedProd.id ? updatedProd : p));
     setProducts(updated);
     saveProducts(updated);
     triggerDebouncedGitHubAutoSync(updated);
     // Guarantee authoritative Firestore save and mirror to Supabase
-    const [fsRes] = await Promise.allSettled([
-      syncAddProductToFirestore(updatedProd),
-      upsertSupabaseProduct(updatedProd),
-    ]);
-    const isOnline = fsRes.status === 'fulfilled' && fsRes.value.success;
-    return { success: true, isOnline };
+    const result = await upsertSupabaseProduct(updatedProd);
+    return { success: result.success, isOnline: result.success, error: result.error };
   };
 
   const handleClearAllProducts = async () => {
