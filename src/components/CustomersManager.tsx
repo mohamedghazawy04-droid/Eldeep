@@ -34,10 +34,10 @@ import {
   calculateTier,
 } from '../services/storage';
 import {
-  subscribeToFirestoreCustomers,
-  syncSaveCustomerToFirestore,
-  syncDeleteCustomerFromFirestore,
-} from '../services/firestoreSync';
+  deleteSupabaseCustomer,
+  fetchSupabaseCustomers,
+  upsertSupabaseCustomer,
+} from '../services/supabaseCustomers';
 
 interface CustomersManagerProps {
   isDarkTheme?: boolean;
@@ -64,15 +64,16 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Subscribe to live Firestore updates
+  // Load the shared customer directory from Supabase (manager-only RLS policy).
   useEffect(() => {
-    const unsub = subscribeToFirestoreCustomers((liveCustomers) => {
-      if (liveCustomers && liveCustomers.length > 0) {
+    fetchSupabaseCustomers().then(({ customers: liveCustomers, error }) => {
+      if (!error) {
         setCustomers(liveCustomers);
         saveAllCustomers(liveCustomers);
+      } else {
+        showToast(`تعذر تحميل العملاء من السحابة: ${error}`);
       }
     });
-    return () => unsub();
   }, []);
 
   const showToast = (msg: string) => {
@@ -92,7 +93,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
     saveCustomer(updated);
     setCustomers((prev) => prev.map((c) => (c.id === cust.id ? updated : c)));
     showToast(`تم تأكيد وتفعيل بريد العميل ${cust.name} بنجاح ✅`);
-    await syncSaveCustomerToFirestore(updated);
+    const result = await upsertSupabaseCustomer(updated);
+    if (!result.success) showToast(`فشل الحفظ السحابي: ${result.error || 'خطأ غير معروف'}`);
   };
 
   // Quick Bonus Points (+5, +10, +50)
@@ -108,7 +110,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
     setCustomers((prev) => prev.map((c) => (c.id === cust.id ? updated : c)));
     showToast(`تمت إضافة +${bonus} نقطة للعميل ${cust.name}! (الرصيد الجديد: ${newPoints} نقطة)`);
 
-    await syncSaveCustomerToFirestore(updated);
+    const result = await upsertSupabaseCustomer(updated);
+    if (!result.success) showToast(`فشل الحفظ السحابي: ${result.error || 'خطأ غير معروف'}`);
   };
 
   // Delete Customer
@@ -120,7 +123,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
     setCustomers((prev) => prev.filter((c) => c.id !== cust.id));
     showToast(`تم حذف العميل ${cust.name} بنجاح.`);
 
-    await syncDeleteCustomerFromFirestore(cust);
+    const result = await deleteSupabaseCustomer(cust);
+    if (!result.success) showToast(`فشل الحذف السحابي: ${result.error || 'خطأ غير معروف'}`);
   };
 
   // Copy phone number
@@ -186,7 +190,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
       };
       saveCustomer(updated);
       setCustomers((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-      await syncSaveCustomerToFirestore(updated);
+      const result = await upsertSupabaseCustomer(updated);
+      if (!result.success) showToast(`فشل الحفظ السحابي: ${result.error || 'خطأ غير معروف'}`);
       showToast(`تم تحديث بيانات ونقاط العميل ${updated.name} بنجاح ✅`);
       setEditingCustomer(null);
     } else {
@@ -205,7 +210,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
       };
       saveCustomer(newCust);
       setCustomers((prev) => [newCust, ...prev]);
-      await syncSaveCustomerToFirestore(newCust);
+      const result = await upsertSupabaseCustomer(newCust);
+      if (!result.success) showToast(`فشل الحفظ السحابي: ${result.error || 'خطأ غير معروف'}`);
       showToast(`تمت إضافة العميل ${newCust.name} بنجاح ✅`);
       setIsAddOpen(false);
     }
@@ -315,7 +321,7 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
             <div className="text-xs text-slate-500 dark:text-slate-400">حالة المزامنة السحابية</div>
             <div className="text-sm font-bold text-sky-700 dark:text-sky-300 mt-1 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>محفوظة سحابياً (Firestore)</span>
+              <span>محفوظة سحابياً (Supabase)</span>
             </div>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-sky-500/20 text-sky-600 dark:text-sky-400 flex items-center justify-center">

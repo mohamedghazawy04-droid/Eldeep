@@ -45,7 +45,9 @@ function createFirestoreInstance(): Firestore {
 }
 
 export const db: Firestore = createFirestoreInstance();
-export const isFirebaseReady = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
+// Firestore was retired in favor of Supabase. Keep the compatibility module for
+// legacy backup integrations, but never open a Firestore connection in the store.
+export const isFirebaseReady = false;
 
 // Test Firestore connection on boot with graceful offline resilience
 async function testConnection() {
@@ -65,11 +67,11 @@ async function testConnection() {
   }
 }
 
-if (typeof window !== 'undefined') {
+if (isFirebaseReady && typeof window !== 'undefined') {
   setTimeout(() => {
     testConnection().catch(() => {});
   }, 1500);
-} else {
+} else if (isFirebaseReady) {
   testConnection().catch(() => {});
 }
 
