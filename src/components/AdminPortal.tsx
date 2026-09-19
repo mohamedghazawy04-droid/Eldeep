@@ -62,9 +62,11 @@ import {
   syncSaveLogoToFirestore,
   subscribeToFirestoreCustomers,
   subscribeToFirestoreLogo,
+  fetchCustomersFromFirestore,
 } from '../services/firestoreSync';
 import { getStoredAllCustomers, getStoredOrders, getStoredPrescriptions, getStoredLogo, saveStoredLogo } from '../services/storage';
 import { optimizeProductImage } from '../utils/imageOptimizer';
+import { enrichProductsWithImages } from '../utils/productImageResolver';
 import { GitHubBackupManager } from './GitHubBackupManager';
 import { getGitHubBackupConfig } from '../services/githubBackup';
 import confetti from 'canvas-confetti';
@@ -306,6 +308,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [activeTab, setActiveTab] = useState<'products' | 'customers' | 'broadcast' | 'github' | 'drive' | 'branding'>('products');
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
+  const [isEnrichingImages, setIsEnrichingImages] = useState(false);
+  const [imageEnrichSuccess, setImageEnrichSuccess] = useState<string | null>(null);
   const [isAddFormHighlighted, setIsAddFormHighlighted] = useState(false);
   const productFormRef = useRef<HTMLDivElement>(null);
   const [portalLogo, setPortalLogo] = useState<string>(() => getStoredLogo() || '/eldeeb_pharmacy_logo.jpg');
@@ -397,6 +401,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   // Live Firestore subscription for Customers and Logo in Admin Portal
   useEffect(() => {
+    fetchCustomersFromFirestore().then((cloudCustomers) => {
+      if (cloudCustomers && cloudCustomers.length > 0) {
+        setCustomersList(cloudCustomers);
+      }
+    });
+
     const unsubCustomers = subscribeToFirestoreCustomers((cloudCustomers) => {
       if (cloudCustomers && cloudCustomers.length > 0) {
         setCustomersList(cloudCustomers);
@@ -747,6 +757,34 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     });
   };
 
+  // Instant bulk automatic image enrichment for catalog products
+  const handleAutoEnrichImages = async () => {
+    setIsEnrichingImages(true);
+    try {
+      const { updatedCount, enrichedProducts } = enrichProductsWithImages(products);
+      if (updatedCount > 0) {
+        if (onBatchImportProducts) {
+          await onBatchImportProducts(enrichedProducts);
+        }
+        setImageEnrichSuccess(`تم بنجاح تحديث وتوليد صور دوائية وطبية حقيقية لـ ${updatedCount} صنف في الكتالوج!`);
+        confetti({
+          particleCount: 70,
+          spread: 60,
+          origin: { y: 0.6 },
+        });
+      } else {
+        setImageEnrichSuccess('جميع الأصناف في الكتالوج تحتوي بالفعل على صور حقيقية ومحدثة!');
+      }
+      setTimeout(() => setImageEnrichSuccess(null), 6000);
+    } catch (e) {
+      console.error(e);
+      setImageEnrichSuccess('حدث خطأ أثناء فحص الصور');
+      setTimeout(() => setImageEnrichSuccess(null), 4000);
+    } finally {
+      setIsEnrichingImages(false);
+    }
+  };
+
   // Broadcast push notification
   const handleSendBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1004,8 +1042,27 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
                 <span>استيراد كشف Excel / CSV (حتى 25 ألف صنف)</span>
               </button>
+
+              <button
+                type="button"
+                onClick={handleAutoEnrichImages}
+                disabled={isEnrichingImages}
+                className="flex-1 sm:flex-initial px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-black shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-60"
+                title="تحديث وتوليد صور صيدلية حقيقية للأصناف التي تفتقر لصور مخصصة"
+              >
+                <Sparkles className={`w-4 h-4 text-purple-200 ${isEnrichingImages ? 'animate-spin' : ''}`} />
+                <span>{isEnrichingImages ? 'جاري الفحص والتحديث...' : '⚡ تحديث وتوليد صور الكتالوج فورياً'}</span>
+              </button>
             </div>
           </div>
+
+          {/* Image Enrichment Banner */}
+          {imageEnrichSuccess && (
+            <div className="p-3 bg-gradient-to-r from-emerald-950/80 to-teal-950/80 border border-emerald-500/40 text-emerald-300 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <span>{imageEnrichSuccess}</span>
+            </div>
+          )}
 
           {/* Main Navigation Tabs */}
           <div className="flex border-b border-slate-800 bg-slate-900/60 p-1.5 rounded-2xl gap-2 overflow-x-auto scrollbar-none shadow-sm">
@@ -2421,6 +2478,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           isOpen={isExcelModalOpen}
           onClose={() => setIsExcelModalOpen(false)}
           existingProducts={products}
+          currentProducts={products}
           onImportComplete={handleExcelImportComplete}
         />
       )}

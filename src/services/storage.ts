@@ -234,13 +234,23 @@ export function saveCustomer(customer: Customer): void {
   }
 }
 
-export function saveAllCustomers(customers: Customer[]): void {
+export function saveAllCustomers(customers: Customer[], forceEmpty = false): void {
   try {
+    if (customers.length === 0 && !forceEmpty) {
+      const currentRaw = localStorage.getItem(STORAGE_KEYS.ALL_CUSTOMERS);
+      if (currentRaw && currentRaw !== '[]') {
+        console.warn('saveAllCustomers was passed empty list; preserving stored customers.');
+        return;
+      }
+    }
     const calibrated = customers.map((c) => ({
       ...c,
       tier: calculateTier(c.points || 0),
     }));
     localStorage.setItem(STORAGE_KEYS.ALL_CUSTOMERS, JSON.stringify(calibrated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('eldeeb_customers_updated'));
+    }
   } catch (e) {
     console.warn('Failed to save all customers', e);
   }
@@ -342,9 +352,72 @@ export function exportCustomersAsCsv(customers: Customer[]): void {
 export function getStoredAllCustomers(): Customer[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.ALL_CUSTOMERS);
+    let list: Customer[] = [];
     if (saved) {
-      return JSON.parse(saved);
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          list = parsed;
+        }
+      } catch {}
     }
+
+    let reconstructed = false;
+
+    // 1. Recover active customer session if missing from directory
+    const currentCustomer = getStoredCustomer();
+    if (currentCustomer && (currentCustomer.phone || currentCustomer.name || currentCustomer.email)) {
+      const cleanPhone = (currentCustomer.phone || '').replace(/[^\d+]/g, '');
+      const exists = list.some(
+        (c) =>
+          c.id === currentCustomer.id ||
+          (cleanPhone && c.phone && c.phone.replace(/[^\d+]/g, '') === cleanPhone) ||
+          (currentCustomer.email && c.email && c.email.toLowerCase() === currentCustomer.email.toLowerCase())
+      );
+      if (!exists) {
+        list.unshift(currentCustomer);
+        reconstructed = true;
+      }
+    }
+
+    // 2. Recover past customer records from completed orders
+    try {
+      const ordersSaved = localStorage.getItem(STORAGE_KEYS.ORDERS);
+      if (ordersSaved) {
+        const orders: OrderRecord[] = JSON.parse(ordersSaved);
+        if (Array.isArray(orders)) {
+          orders.forEach((ord) => {
+            if (!ord.customerPhone) return;
+            const ordPhone = ord.customerPhone.replace(/[^\d+]/g, '');
+            const found = list.find(
+              (c) => c.phone && c.phone.replace(/[^\d+]/g, '') === ordPhone
+            );
+            if (!found) {
+              list.push({
+                id: 'cust-' + ordPhone,
+                name: ord.customerName || 'عميل صيدلية الديب',
+                phone: ord.customerPhone,
+                email: ord.customerEmail,
+                address: ord.customerAddress || '',
+                points: ord.pointsEarned || 0,
+                tier: calculateTier(ord.pointsEarned || 0),
+                totalOrders: 1,
+                joinedDate: ord.date || new Date().toISOString(),
+              });
+              reconstructed = true;
+            }
+          });
+        }
+      }
+    } catch {}
+
+    if (reconstructed && list.length > 0) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.ALL_CUSTOMERS, JSON.stringify(list));
+      } catch {}
+    }
+
+    return list;
   } catch (e) {
     console.error('Failed to load all customers', e);
   }

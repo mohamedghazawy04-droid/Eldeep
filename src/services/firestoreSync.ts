@@ -562,6 +562,23 @@ export async function fetchCustomerFromFirestore(identifier: string): Promise<Cu
 }
 
 /**
+  * Fetch all customers from Firestore
+  */
+export async function fetchCustomersFromFirestore(): Promise<Customer[]> {
+  if (!isFirebaseReady) return [];
+  try {
+    const custRef = collection(db, CUSTOMERS_COL);
+    const snap = await getDocs(custRef);
+    const items: Customer[] = [];
+    snap.forEach((d) => items.push(d.data() as Customer));
+    return items;
+  } catch (err) {
+    console.warn('Could not fetch all customers from Firestore:', err);
+    return [];
+  }
+}
+
+/**
  * Subscribe to Customers in Firestore (Live Admin & Store sync)
  */
 export function subscribeToFirestoreCustomers(

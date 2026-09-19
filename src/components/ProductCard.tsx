@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ShoppingCart, Sparkles, Info, Pill, Plus, Maximize2 } from 'lucide-react';
 import { Product } from '../types';
 import { isProductNew } from '../utils/productUtils';
+import { resolveProductImage } from '../utils/productImageResolver';
 
 interface ProductCardProps {
   product: Product;
@@ -17,6 +18,8 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({
   onViewDetails,
   onZoomImage,
 }) => {
+  const displayImage = resolveProductImage(product);
+
   return (
     <motion.div
       id={`product-card-${product.id}`}
@@ -33,14 +36,19 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({
         onClick={() => onViewDetails(product)}
       >
         <img
-          src={product.image}
+          src={displayImage}
           alt={product.nameAr}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"
           onError={(e) => {
-            (e.currentTarget as HTMLImageElement).src = '/eldeeb_logo.jpg';
+            const fallback = resolveProductImage({ ...product, image: '' });
+            if ((e.currentTarget as HTMLImageElement).src !== fallback) {
+              (e.currentTarget as HTMLImageElement).src = fallback;
+            } else {
+              (e.currentTarget as HTMLImageElement).src = '/eldeeb_logo.jpg';
+            }
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

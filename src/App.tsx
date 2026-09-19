@@ -573,8 +573,15 @@ export default function App() {
   };
 
   // Filtered Products
-  const catalogForView = viewMode === 'store' 
-    ? (customerProducts.length > 0 ? customerProducts : products) 
+  // Prioritize cloud store pagination when customerProducts has items and covers the catalog,
+  // otherwise fallback to the local/Firestore products array so no items are ever hidden.
+  const isCloudStoreCatalog = 
+    viewMode === 'store' && 
+    customerProducts.length > 0 && 
+    customerTotal >= products.length;
+
+  const catalogForView = isCloudStoreCatalog 
+    ? customerProducts 
     : products;
 
   const filteredProducts = useMemo(() => {
@@ -609,19 +616,38 @@ export default function App() {
     setProductDisplayLimit(24);
   }, [selectedCategory, searchQuery]);
 
-  const visibleCustomerProducts = useMemo(
-    () => filteredProducts.slice(0, productDisplayLimit),
-    [filteredProducts, productDisplayLimit]
-  );
+  const visibleCustomerProducts = useMemo(() => {
+    if (isCloudStoreCatalog) {
+      return filteredProducts;
+    }
+    return filteredProducts.slice(0, productDisplayLimit);
+  }, [isCloudStoreCatalog, filteredProducts, productDisplayLimit]);
+
+  const totalStoreProductsCount = isCloudStoreCatalog ? customerTotal : filteredProducts.length;
+
+  const hasMoreProducts = isCloudStoreCatalog
+    ? customerHasMore
+    : visibleCustomerProducts.length < filteredProducts.length;
+
+  const remainingProductsCount = Math.max(0, totalStoreProductsCount - visibleCustomerProducts.length);
+
+  const handleLoadMore = () => {
+    if (isCloudStoreCatalog) {
+      loadMoreCustomerProducts();
+    } else {
+      setProductDisplayLimit((prev) => prev + 24);
+    }
+  };
 
   // Category counts
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    catalogForView.forEach((p) => {
+    const baseList = products.length > 0 ? products : catalogForView;
+    baseList.forEach((p) => {
       counts[p.category] = (counts[p.category] || 0) + 1;
     });
     return counts;
-  }, [catalogForView]);
+  }, [products, catalogForView]);
 
   const unreadNotifsCount = notifications.filter((n) => !n.read).length;
   const totalCartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -795,7 +821,7 @@ export default function App() {
         <section id="products-grid-section" className="space-y-4">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>
-              عرض {visibleCustomerProducts.length} من أصل {viewMode === 'store' ? customerTotal : filteredProducts.length} صنف متاح
+              عرض {visibleCustomerProducts.length} من أصل {totalStoreProductsCount} صنف متاح
             </span>
             {selectedCategory !== 'all' && (
               <button
@@ -846,15 +872,25 @@ export default function App() {
               ))}
             </div>
           )}
-          {(viewMode === 'store' ? customerHasMore : visibleCustomerProducts.length < filteredProducts.length) && (
-            <div className="flex justify-center pt-2">
+          {hasMoreProducts && (
+            <div className="flex justify-center pt-4">
               <button
                 type="button"
-                onClick={viewMode === 'store' ? loadMoreCustomerProducts : () => setProductDisplayLimit((limit) => limit + 24)}
+                onClick={handleLoadMore}
                 disabled={customerLoading}
-                className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-2xl text-xs font-bold shadow-sm transition-colors"
+                className="group inline-flex items-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-700 active:scale-95 disabled:opacity-60 text-white rounded-2xl text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition-all"
               >
-                {customerLoading ? 'جاري التحميل...' : `تحميل المزيد من المنتجات (${(viewMode === 'store' ? customerTotal : filteredProducts.length) - visibleCustomerProducts.length} متبقي)`}
+                {customerLoading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>جاري تحميل المزيد من المنتجات...</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                    <span>تحميل المزيد من المنتجات ({remainingProductsCount} متبقي)</span>
+                  </>
+                )}
               </button>
             </div>
           )}

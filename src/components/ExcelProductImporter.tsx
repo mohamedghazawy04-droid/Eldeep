@@ -14,9 +14,12 @@ import {
 } from 'lucide-react';
 import { Product, ProductCategory } from '../types';
 import { CATEGORIES } from '../data/initialData';
+import { resolveProductImage } from '../utils/productImageResolver';
 
 interface ExcelProductImporterProps {
-  currentProducts: Product[];
+  currentProducts?: Product[];
+  existingProducts?: Product[];
+  isOpen?: boolean;
   onImportComplete: (
     importedProducts: Product[],
     mode: 'merge' | 'replace'
@@ -25,10 +28,17 @@ interface ExcelProductImporterProps {
 }
 
 export const ExcelProductImporter: React.FC<ExcelProductImporterProps> = ({
-  currentProducts,
+  currentProducts = [],
+  existingProducts = [],
+  isOpen = true,
   onImportComplete,
   onClose,
 }) => {
+  if (!isOpen) return null;
+
+  const catalogProducts = (existingProducts && existingProducts.length > 0)
+    ? existingProducts
+    : (currentProducts || []);
   const [fileName, setFileName] = useState<string>('');
   const [parsedItems, setParsedItems] = useState<Product[]>([]);
   const [, setPreviewRows] = useState<any[]>([]);
@@ -233,7 +243,9 @@ export const ExcelProductImporter: React.FC<ExcelProductImporterProps> = ({
           category: categoryVal,
           price: priceVal,
           points: pointsVal,
-          image: imageVal.startsWith('http') || imageVal.startsWith('/') || imageVal.startsWith('data:') ? imageVal : '/eldeeb_logo.jpg',
+          image: (imageVal.startsWith('http') || imageVal.startsWith('data:') || (imageVal.startsWith('/') && !imageVal.includes('eldeeb_logo'))) 
+            ? imageVal 
+            : resolveProductImage({ nameAr: nameArVal, nameEn: nameEnVal, category: categoryVal, dosageForm: dosageFormVal, activeIngredient: activeIngredientVal }),
           inStock: stockVal > 0,
           dosageForm: dosageFormVal || 'أقراص',
           activeIngredient: activeIngredientVal || 'وفق التركيبة الطبية',
@@ -331,12 +343,12 @@ export const ExcelProductImporter: React.FC<ExcelProductImporterProps> = ({
 
   // Export current entire catalog to Excel
   const handleExportCurrentCatalog = () => {
-    if (currentProducts.length === 0) {
+    if (catalogProducts.length === 0) {
       alert('لا توجد أصناف حالية لتصديرها.');
       return;
     }
 
-    const exportRows = currentProducts.map((p) => ({
+    const exportRows = catalogProducts.map((p) => ({
       'كود الصنف': p.id,
       'اسم الدواء بالعربية': p.nameAr,
       'الاسم بالإنجليزي': p.nameEn || '',
@@ -353,7 +365,7 @@ export const ExcelProductImporter: React.FC<ExcelProductImporterProps> = ({
     const ws = XLSX.utils.json_to_sheet(exportRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'مخزون_الأدوية');
-    XLSX.writeFile(wb, `مخزون_صيدلية_الذيب_الكامل_${currentProducts.length}_صنف.xlsx`);
+    XLSX.writeFile(wb, `مخزون_صيدلية_الذيب_الكامل_${catalogProducts.length}_صنف.xlsx`);
   };
 
   // Execute Import
@@ -429,7 +441,7 @@ export const ExcelProductImporter: React.FC<ExcelProductImporterProps> = ({
             className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700/80 hover:bg-slate-700 text-emerald-300 rounded-xl text-xs font-bold transition-all border border-emerald-500/30 hover:border-emerald-400"
           >
             <FileText className="w-4 h-4" />
-            <span>تصدير المخزون الحالي كملف Excel ({currentProducts.length} صنف)</span>
+            <span>تصدير المخزون الحالي كملف Excel ({catalogProducts.length} صنف)</span>
           </button>
         </div>
 

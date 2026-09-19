@@ -39,6 +39,12 @@ import {
   fetchSupabaseCustomers,
   upsertSupabaseCustomer,
 } from '../services/supabaseCustomers';
+import {
+  subscribeToFirestoreCustomers,
+  fetchCustomersFromFirestore,
+  syncSaveCustomerToFirestore,
+  syncDeleteCustomerFromFirestore,
+} from '../services/firestoreSync';
 import { uploadCustomersBackupToGitHub } from '../services/githubBackup';
 
 interface CustomersManagerProps {
@@ -67,16 +73,63 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isUploadingToGitHub, setIsUploadingToGitHub] = useState(false);
 
-  // Load the shared customer directory from Supabase (manager-only RLS policy).
+  // Load customer directory from Firestore (primary) and Supabase safely without wiping
   useEffect(() => {
-    fetchSupabaseCustomers().then(({ customers: liveCustomers, error }) => {
-      if (!error) {
-        setCustomers(liveCustomers);
-        saveAllCustomers(liveCustomers);
-      } else {
-        showToast(`تعذر تحميل العملاء من السحابة: ${error}`);
+    // 1. Initial load from Firestore
+    fetchCustomersFromFirestore().then((cloudCusts) => {
+      if (cloudCusts && cloudCusts.length > 0) {
+        setCustomers((prev) => {
+          const map = new Map<string, Customer>();
+          prev.forEach((c) => map.set(c.id || c.phone, c));
+          cloudCusts.forEach((c) => map.set(c.id || c.phone, c));
+          const merged = Array.from(map.values());
+          saveAllCustomers(merged);
+          return merged;
+        });
       }
     });
+
+    // 2. Real-time subscription to Firestore customers
+    const unsubFirestore = subscribeToFirestoreCustomers((cloudCustomers) => {
+      if (cloudCustomers && cloudCustomers.length > 0) {
+        setCustomers((prev) => {
+          const map = new Map<string, Customer>();
+          prev.forEach((c) => map.set(c.id || c.phone, c));
+          cloudCustomers.forEach((c) => map.set(c.id || c.phone, c));
+          const merged = Array.from(map.values());
+          saveAllCustomers(merged);
+          return merged;
+        });
+      }
+    });
+
+    // 3. Supplement with Supabase customers (if any)
+    fetchSupabaseCustomers().then(({ customers: liveCustomers, error }) => {
+      if (!error && liveCustomers && liveCustomers.length > 0) {
+        setCustomers((prev) => {
+          const map = new Map<string, Customer>();
+          prev.forEach((c) => map.set(c.id || c.phone, c));
+          liveCustomers.forEach((c) => map.set(c.id || c.phone, c));
+          const merged = Array.from(map.values());
+          saveAllCustomers(merged);
+          return merged;
+        });
+      }
+    });
+
+    // 4. Listen for local storage updates
+    const handleLocalCustChange = () => {
+      const stored = getStoredAllCustomers();
+      if (stored && stored.length > 0) {
+        setCustomers(stored);
+      }
+    };
+    window.addEventListener('eldeeb_customers_updated', handleLocalCustChange);
+
+    return () => {
+      unsubFirestore();
+      window.removeEventListener('eldeeb_customers_updated', handleLocalCustChange);
+    };
   }, []);
 
   const showToast = (msg: string) => {
@@ -113,8 +166,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
     saveCustomer(updated);
     setCustomers((prev) => prev.map((c) => (c.id === cust.id ? updated : c)));
     showToast(`تم تأكيد وتفعيل بريد العميل ${cust.name} بنجاح ✅`);
-    const result = await upsertSupabaseCustomer(updated);
-    if (!result.success) showToast(`فشل الحفظ السحابي: ${result.error || 'خطأ غير معروف'}`);
+    syncSaveCustomerToFirestore(updated);
+    upsertSupabaseCustomer(updated).catch(() => {});
   };
 
   // Quick Bonus Points (+5, +10, +50)
@@ -129,9 +182,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
     saveCustomer(updated);
     setCustomers((prev) => prev.map((c) => (c.id === cust.id ? updated : c)));
     showToast(`تمت إضافة +${bonus} نقطة للعميل ${cust.name}! (الرصيد الجديد: ${newPoints} نقطة)`);
-
-    const result = await upsertSupabaseCustomer(updated);
-    if (!result.success) showToast(`فشل الحفظ السحابي: ${result.error || 'خطأ غير معروف'}`);
+    syncSaveCustomerToFirestore(updated);
+    upsertSupabaseCustomer(updated).catch(() => {});
   };
 
   // Delete Customer
@@ -143,8 +195,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
     setCustomers((prev) => prev.filter((c) => c.id !== cust.id));
     showToast(`تم حذف العميل ${cust.name} بنجاح.`);
 
-    const result = await deleteSupabaseCustomer(cust);
-    if (!result.success) showToast(`فشل الحذف السحابي: ${result.error || 'خطأ غير معروف'}`);
+    syncDeleteCustomerFromFirestore(cust);
+    deleteSupabaseCustomer(cust).catch(() => {});
   };
 
   // Copy phone number
@@ -210,8 +262,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
       };
       saveCustomer(updated);
       setCustomers((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-      const result = await upsertSupabaseCustomer(updated);
-      if (!result.success) showToast(`فشل الحفظ السحابي: ${result.error || 'خطأ غير معروف'}`);
+      syncSaveCustomerToFirestore(updated);
+      upsertSupabaseCustomer(updated).catch(() => {});
       showToast(`تم تحديث بيانات ونقاط العميل ${updated.name} بنجاح ✅`);
       setEditingCustomer(null);
     } else {
@@ -230,8 +282,8 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
       };
       saveCustomer(newCust);
       setCustomers((prev) => [newCust, ...prev]);
-      const result = await upsertSupabaseCustomer(newCust);
-      if (!result.success) showToast(`فشل الحفظ السحابي: ${result.error || 'خطأ غير معروف'}`);
+      syncSaveCustomerToFirestore(newCust);
+      upsertSupabaseCustomer(newCust).catch(() => {});
       showToast(`تمت إضافة العميل ${newCust.name} بنجاح ✅`);
       setIsAddOpen(false);
     }

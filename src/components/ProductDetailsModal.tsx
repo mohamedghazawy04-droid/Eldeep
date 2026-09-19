@@ -18,6 +18,7 @@ import {
 import { Product } from '../types';
 import { isProductNew } from '../utils/productUtils';
 import { createProductInquiryWhatsAppUrl, openWhatsApp } from '../services/whatsapp';
+import { resolveProductImage } from '../utils/productImageResolver';
 import { DosageCalculator } from './DosageCalculator';
 
 interface ProductDetailsModalProps {
@@ -72,10 +73,13 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
           title="انقر لتكبير صورة العلبة للشاشة كاملة"
         >
           <img
-            src={product.image}
+            src={resolveProductImage(product)}
             alt={product.nameAr}
             className="max-h-full max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = '/eldeeb_logo.jpg';
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
 
