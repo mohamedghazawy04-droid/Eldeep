@@ -70,6 +70,8 @@ import { Logo } from './components/Logo';
 import { MobileBottomBar } from './components/MobileBottomBar';
 import {
   deleteSupabaseProduct,
+  fetchPublicProductPage,
+  PUBLIC_PAGE_SIZE,
   subscribeToSupabaseProducts,
   upsertSupabaseProduct,
   upsertSupabaseProducts,
@@ -81,6 +83,11 @@ import { triggerDebouncedGitHubAutoSync, restoreFromGitHubBackup } from './servi
 export default function App() {
   // State
   const [products, setProducts] = useState<Product[]>(getStoredProducts);
+  const [customerProducts, setCustomerProducts] = useState<Product[]>([]);
+  const [customerTotal, setCustomerTotal] = useState(0);
+  const [customerPage, setCustomerPage] = useState(0);
+  const [customerHasMore, setCustomerHasMore] = useState(false);
+  const [customerLoading, setCustomerLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
@@ -193,6 +200,40 @@ export default function App() {
     saveTheme(isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
+  useEffect(() => {
+    if (viewMode !== 'store') return;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setCustomerLoading(true);
+      const page = await fetchPublicProductPage(0, selectedCategory, searchQuery);
+      if (active && page) {
+        setCustomerProducts(page.products);
+        setCustomerTotal(page.total);
+        setCustomerPage(0);
+        setCustomerHasMore(page.hasMore);
+      }
+      if (active) setCustomerLoading(false);
+    }, searchQuery.trim() ? 250 : 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [viewMode, selectedCategory, searchQuery]);
+
+  const loadMoreCustomerProducts = async () => {
+    if (customerLoading || !customerHasMore) return;
+    setCustomerLoading(true);
+    const nextPage = customerPage + 1;
+    const page = await fetchPublicProductPage(nextPage, selectedCategory, searchQuery);
+    if (page) {
+      setCustomerProducts((current) => [...current, ...page.products]);
+      setCustomerPage(nextPage);
+      setCustomerTotal(page.total);
+      setCustomerHasMore(page.hasMore);
+    }
+    setCustomerLoading(false);
+  };
+
   // Real-time Firestore synchronization with offline resilience
   useEffect(() => {
     // 1. Primary real-time subscription from Firestore
@@ -225,7 +266,7 @@ export default function App() {
 
     // 3. Supabase is the shared source of truth. Replace stale local catalogs
     // once the cloud catalog is available; only migrate local data when cloud is empty.
-    const unsubSupabase = subscribeToSupabaseProducts((supabaseProducts) => {
+    const unsubSupabase = viewMode === 'admin' ? subscribeToSupabaseProducts((supabaseProducts) => {
       if (supabaseProducts && supabaseProducts.length > 0) {
         saveProducts(supabaseProducts);
         setProducts(supabaseProducts);
@@ -235,7 +276,7 @@ export default function App() {
           return current;
         });
       }
-    }, viewMode === 'admin');
+    }, true) : () => {};
 
     // 4. Emergency GitHub Cloud Fallback / Curated Catalog Seeding (if catalog is still empty)
     const githubFallbackTimer = setTimeout(() => {
@@ -517,8 +558,9 @@ export default function App() {
   };
 
   // Filtered Products
+  const catalogForView = viewMode === 'store' ? customerProducts : products;
   const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
+    return catalogForView.filter((product) => {
       const matchesCategory =
         selectedCategory === 'all' || product.category === selectedCategory;
 
@@ -533,7 +575,7 @@ export default function App() {
 
       return matchesCategory && matchesSearch;
     });
-  }, [products, selectedCategory, searchQuery]);
+  }, [catalogForView, selectedCategory, searchQuery]);
 
   useEffect(() => {
     setProductDisplayLimit(24);
@@ -547,11 +589,11 @@ export default function App() {
   // Category counts
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    products.forEach((p) => {
+    catalogForView.forEach((p) => {
       counts[p.category] = (counts[p.category] || 0) + 1;
     });
     return counts;
-  }, [products]);
+  }, [catalogForView]);
 
   const unreadNotifsCount = notifications.filter((n) => !n.read).length;
   const totalCartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -725,7 +767,7 @@ export default function App() {
         <section id="products-grid-section" className="space-y-4">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>
-              عرض {visibleCustomerProducts.length} من أصل {filteredProducts.length} صنف متاح
+              عرض {visibleCustomerProducts.length} من أصل {viewMode === 'store' ? customerTotal : filteredProducts.length} صنف متاح
             </span>
             {selectedCategory !== 'all' && (
               <button
@@ -776,14 +818,15 @@ export default function App() {
               ))}
             </div>
           )}
-          {visibleCustomerProducts.length < filteredProducts.length && (
+          {(viewMode === 'store' ? customerHasMore : visibleCustomerProducts.length < filteredProducts.length) && (
             <div className="flex justify-center pt-2">
               <button
                 type="button"
-                onClick={() => setProductDisplayLimit((limit) => limit + 24)}
+                onClick={viewMode === 'store' ? loadMoreCustomerProducts : () => setProductDisplayLimit((limit) => limit + 24)}
+                disabled={customerLoading}
                 className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-2xl text-xs font-bold shadow-sm transition-colors"
               >
-                تحميل المزيد من المنتجات ({filteredProducts.length - visibleCustomerProducts.length} متبقي)
+                {customerLoading ? 'جاري التحميل...' : `تحميل المزيد من المنتجات (${(viewMode === 'store' ? customerTotal : filteredProducts.length) - visibleCustomerProducts.length} متبقي)`}
               </button>
             </div>
           )}

@@ -1,7 +1,14 @@
-import { Product } from '../types';
+import { Product, ProductCategory } from '../types';
 import { isSupabaseReady, supabase, SupabaseProductRow } from './supabase';
 
 const TABLE = 'products';
+export const PUBLIC_PAGE_SIZE = 24;
+
+export type PublicProductPage = {
+  products: Product[];
+  total: number;
+  hasMore: boolean;
+};
 
 export function productToSupabaseRow(product: Product): SupabaseProductRow {
   return {
@@ -50,6 +57,38 @@ export function supabaseRowToProduct(row: SupabaseProductRow): Product {
     isLowStock: Boolean(row.is_low_stock),
     isComingSoon: Boolean(row.is_coming_soon),
   };
+}
+
+export async function fetchPublicProductPage(
+  page: number,
+  category: ProductCategory | 'all',
+  search: string
+): Promise<PublicProductPage | null> {
+  if (!isSupabaseReady) return null;
+  const from = Math.max(0, page) * PUBLIC_PAGE_SIZE;
+  const to = from + PUBLIC_PAGE_SIZE - 1;
+  let query = supabase
+    .from(TABLE)
+    .select('*', { count: 'exact' })
+    .eq('in_stock', true)
+    .eq('is_coming_soon', false)
+    .order('updated_at', { ascending: false })
+    .range(from, to);
+  if (category !== 'all') query = query.eq('category', category);
+  const safeSearch = search.trim().replace(/[%,()]/g, ' ');
+  if (safeSearch) {
+    query = query.or(
+      `name_ar.ilike.%${safeSearch}%,name_en.ilike.%${safeSearch}%,active_ingredient.ilike.%${safeSearch}%`
+    );
+  }
+  const { data, count, error } = await query;
+  if (error) {
+    console.warn('Supabase public page read failed:', error.message);
+    return null;
+  }
+  const products = (data || []).map((row) => supabaseRowToProduct(row as SupabaseProductRow));
+  const total = count || 0;
+  return { products, total, hasMore: from + products.length < total };
 }
 
 export async function fetchSupabaseProducts(includeUnavailable = false): Promise<Product[] | null> {
