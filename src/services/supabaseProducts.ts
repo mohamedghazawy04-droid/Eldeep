@@ -52,7 +52,7 @@ export function supabaseRowToProduct(row: SupabaseProductRow): Product {
     points: Number(row.points || 0),
     image: row.image || '',
     tags: row.tags || undefined,
-    isNew: Boolean(row.is_new),
+    isNew: Boolean(row.is_new) && (!row.updated_at || Date.now() - new Date(row.updated_at).getTime() < 24 * 60 * 60 * 1000),
     stockQuantity: row.stock_quantity == null ? undefined : Number(row.stock_quantity),
     isLowStock: Boolean(row.is_low_stock),
     isComingSoon: Boolean(row.is_coming_soon),

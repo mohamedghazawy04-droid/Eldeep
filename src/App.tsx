@@ -78,6 +78,7 @@ import {
 } from './services/supabaseProducts';
 import { upsertSupabaseCustomer } from './services/supabaseCustomers';
 import { uploadProductImage } from './services/supabaseStorage';
+import { createSupabaseNotification, mergeCloudNotifications, subscribeToSupabaseNotifications } from './services/supabaseNotifications';
 import { triggerDebouncedGitHubAutoSync, restoreFromGitHubBackup } from './services/githubBackup';
 
 export default function App() {
@@ -250,6 +251,9 @@ export default function App() {
         setNotifications(updatedNotifs);
       }
     });
+    const unsubCloudNotifs = subscribeToSupabaseNotifications((cloudNotifs) => {
+      setNotifications((local) => mergeCloudNotifications(cloudNotifs, local));
+    });
 
     // 2. Hydrate from IndexedDB if in-memory products are empty
     loadProductsFromIndexedDb().then((idbProducts) => {
@@ -341,6 +345,7 @@ export default function App() {
     return () => {
       unsubProducts();
       unsubNotifs();
+      unsubCloudNotifs();
       unsubSupabase();
       unsubCustomers();
       unsubLogo();
@@ -463,13 +468,15 @@ export default function App() {
     saveProducts(updated);
     triggerDebouncedGitHubAutoSync(updated);
 
-    // Automatically display in notifications list for customers
-    const notifTitle = `📦 صنف جديد: ${productWithMeta.nameAr}`;
-    const notifMsg = `تمت إضافة ${productWithMeta.nameAr} إلى الصيدلية بسعر ${productWithMeta.price} ج.م مع +${productWithMeta.points} نقطة ولاء!`;
-    handleBroadcastNotification(notifTitle, notifMsg, productWithMeta.id);
-
     // Guarantee authoritative Firestore save and mirror to Supabase
     const result = await upsertSupabaseProduct(productWithMeta);
+    if (result.success) {
+      await createSupabaseNotification({
+        title: `📦 صنف جديد: ${productWithMeta.nameAr}`,
+        message: `تمت إضافة ${productWithMeta.nameAr} إلى الصيدلية بسعر ${productWithMeta.price} ج.م مع +${productWithMeta.points} نقطة ولاء!`,
+        productId: productWithMeta.id,
+      });
+    }
     return { success: result.success, isOnline: result.success, error: result.error };
   };
 
@@ -485,13 +492,20 @@ export default function App() {
   const handleUpdateProduct = async (updatedProd: Product) => {
     const uploaded = await uploadProductImage(updatedProd.image, updatedProd.id);
     if (!uploaded.success) return { success: false, isOnline: false, error: uploaded.error };
-    updatedProd = { ...updatedProd, image: uploaded.url };
+    updatedProd = { ...updatedProd, image: uploaded.url, isNew: true, createdAt: Date.now() };
     const updated = products.map((p) => (p.id === updatedProd.id ? updatedProd : p));
     setProducts(updated);
     saveProducts(updated);
     triggerDebouncedGitHubAutoSync(updated);
     // Guarantee authoritative Firestore save and mirror to Supabase
     const result = await upsertSupabaseProduct(updatedProd);
+    if (result.success) {
+      await createSupabaseNotification({
+        title: `✏️ تم تعديل صنف: ${updatedProd.nameAr}`,
+        message: `تم تحديث بيانات ${updatedProd.nameAr} في كتالوج الصيدلية.`,
+        productId: updatedProd.id,
+      });
+    }
     return { success: result.success, isOnline: result.success, error: result.error };
   };
 
@@ -538,6 +552,7 @@ export default function App() {
     addBroadcastNotification(title, message, productId);
     setNotifications(getStoredNotifications());
     syncBroadcastNotificationToFirestore(title, message, productId);
+    createSupabaseNotification({ title, message, productId }).catch(() => {});
   };
 
   const handleMarkAllNotificationsRead = async () => {
