@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ShieldCheck,
@@ -777,13 +777,27 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       a.category.toLowerCase().includes(searchAppTerm.toLowerCase())
   );
 
-  const filteredProducts = products.filter(
-    (p) =>
-      p.nameAr.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
-      p.nameEn.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
-      (p.activeIngredient && p.activeIngredient.toLowerCase().includes(productSearchTerm.toLowerCase()))
+  const [adminDisplayLimit, setAdminDisplayLimit] = useState(100);
+
+  const filteredProducts = useMemo(() => {
+    const term = productSearchTerm.trim().toLowerCase();
+    if (!term) return products;
+    return products.filter(
+      (p) =>
+        p.nameAr.toLowerCase().includes(term) ||
+        p.nameEn.toLowerCase().includes(term) ||
+        (p.activeIngredient && p.activeIngredient.toLowerCase().includes(term))
+    );
+  }, [products, productSearchTerm]);
+
+  useEffect(() => {
+    setAdminDisplayLimit(100);
+  }, [productSearchTerm]);
+
+  const visibleProducts = useMemo(
+    () => filteredProducts.slice(0, adminDisplayLimit),
+    [filteredProducts, adminDisplayLimit]
   );
-  const visibleProducts = filteredProducts.slice(0, 100);
 
   return (
     <div
@@ -1671,9 +1685,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   ))}
                 </div>
                 {filteredProducts.length > visibleProducts.length && (
-                  <p className="text-[11px] text-slate-400 text-center">
-                    يتم عرض أول {visibleProducts.length} نتيجة من {filteredProducts.length}. استخدم البحث للوصول إلى أي صنف.
-                  </p>
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                    <p className="text-[11px] text-slate-400">
+                      يتم عرض أول {visibleProducts.length} نتيجة من أصل {filteredProducts.length} صنف.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setAdminDisplayLimit((prev) => prev + 100)}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 hover:border-cyan-500/50 rounded-xl text-xs font-bold transition-all"
+                    >
+                      عرض 100 صنف إضافي ({filteredProducts.length - visibleProducts.length} متبقي)
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

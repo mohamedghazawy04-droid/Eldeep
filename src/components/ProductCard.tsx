@@ -11,7 +11,7 @@ interface ProductCardProps {
   onZoomImage?: (product: Product) => void;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({
+export const ProductCard: React.FC<ProductCardProps> = React.memo(({
   product,
   onAddToCart,
   onViewDetails,
@@ -37,7 +37,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           alt={product.nameAr}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = '/eldeeb_logo.jpg';
+          }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
@@ -179,4 +183,4 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       </div>
     </motion.div>
   );
-};
+});

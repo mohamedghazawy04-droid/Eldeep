@@ -573,22 +573,35 @@ export default function App() {
   };
 
   // Filtered Products
-  const catalogForView = viewMode === 'store' ? customerProducts : products;
-  const filteredProducts = useMemo(() => {
-    return catalogForView.filter((product) => {
-      const matchesCategory =
-        selectedCategory === 'all' || product.category === selectedCategory;
+  const catalogForView = viewMode === 'store' 
+    ? (customerProducts.length > 0 ? customerProducts : products) 
+    : products;
 
-      const q = searchQuery.trim().toLowerCase();
-      const matchesSearch =
-        !q ||
+  const filteredProducts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const hasSearch = Boolean(q);
+    const hasCategory = selectedCategory !== 'all';
+
+    if (!hasSearch && !hasCategory) {
+      return catalogForView;
+    }
+
+    return catalogForView.filter((product) => {
+      if (hasCategory && product.category !== selectedCategory) {
+        return false;
+      }
+      if (!hasSearch) {
+        return true;
+      }
+
+      return (
         product.nameAr.toLowerCase().includes(q) ||
         product.nameEn.toLowerCase().includes(q) ||
-        product.activeIngredient.toLowerCase().includes(q) ||
-        product.description.toLowerCase().includes(q) ||
-        product.tags?.some((t) => t.toLowerCase().includes(q));
-
-      return matchesCategory && matchesSearch;
+        (product.activeIngredient && product.activeIngredient.toLowerCase().includes(q)) ||
+        (product.description && product.description.toLowerCase().includes(q)) ||
+        (product.dosageForm && product.dosageForm.toLowerCase().includes(q)) ||
+        (product.tags && product.tags.some((t) => t.toLowerCase().includes(q)))
+      );
     });
   }, [catalogForView, selectedCategory, searchQuery]);
 
