@@ -182,6 +182,7 @@ export default function App() {
 
   // Mobile Pinch/Tap Zoom Modal for product images
   const [zoomedProduct, setZoomedProduct] = useState<Product | null>(null);
+  const [productDisplayLimit, setProductDisplayLimit] = useState(24);
 
   // Micro-interaction: Animated Cart Drop payload & Flying Item trajectory
   const [cartDropPayload, setCartDropPayload] = useState<CartDropPayload | null>(null);
@@ -534,6 +535,15 @@ export default function App() {
     });
   }, [products, selectedCategory, searchQuery]);
 
+  useEffect(() => {
+    setProductDisplayLimit(24);
+  }, [selectedCategory, searchQuery]);
+
+  const visibleCustomerProducts = useMemo(
+    () => filteredProducts.slice(0, productDisplayLimit),
+    [filteredProducts, productDisplayLimit]
+  );
+
   // Category counts
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -715,7 +725,7 @@ export default function App() {
         <section id="products-grid-section" className="space-y-4">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>
-              عرض {filteredProducts.length} من أصل {products.length} صنف متاح
+              عرض {visibleCustomerProducts.length} من أصل {filteredProducts.length} صنف متاح
             </span>
             {selectedCategory !== 'all' && (
               <button
@@ -755,7 +765,7 @@ export default function App() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
-              {filteredProducts.map((product) => (
+              {visibleCustomerProducts.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
@@ -764,6 +774,17 @@ export default function App() {
                   onZoomImage={(p) => setZoomedProduct(p)}
                 />
               ))}
+            </div>
+          )}
+          {visibleCustomerProducts.length < filteredProducts.length && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => setProductDisplayLimit((limit) => limit + 24)}
+                className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-2xl text-xs font-bold shadow-sm transition-colors"
+              >
+                تحميل المزيد من المنتجات ({filteredProducts.length - visibleCustomerProducts.length} متبقي)
+              </button>
             </div>
           )}
         </section>
