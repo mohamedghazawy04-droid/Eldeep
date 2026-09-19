@@ -17,6 +17,7 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { Product } from '../types';
 import {
@@ -24,6 +25,7 @@ import {
   getGitHubBackupConfig,
   saveGitHubBackupConfig,
   uploadBackupToGitHub,
+  uploadCustomersBackupToGitHub,
   restoreFromGitHubBackup,
   downloadBackupJsonFile,
   testGitHubConnection,
@@ -42,6 +44,7 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
   const [config, setConfig] = useState<GitHubBackupConfig>(getGitHubBackupConfig);
   const [showToken, setShowToken] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingCustomers, setIsUploadingCustomers] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string; link?: string } | null>(null);
@@ -93,6 +96,26 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
       }
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleUploadCustomersNow = async () => {
+    setIsUploadingCustomers(true);
+    setStatusMsg(null);
+    try {
+      const res = await uploadCustomersBackupToGitHub(undefined, config);
+      if (res.success) {
+        setStatusMsg({
+          type: 'success',
+          text: `تم رفع بيانات العملاء ونقاط الولاء بنجاح إلى GitHub!`,
+          link: res.commitUrl,
+        });
+        setConfig(getGitHubBackupConfig());
+      } else {
+        setStatusMsg({ type: 'error', text: res.error || 'فشل رفع العملاء إلى GitHub' });
+      }
+    } finally {
+      setIsUploadingCustomers(false);
     }
   };
 
@@ -285,7 +308,7 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
       </div>
 
       {/* Main Interactive Action Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* Action 1: Upload to GitHub with gentle pulse effect */}
         <button
           type="button"
@@ -313,7 +336,32 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
           </div>
         </button>
 
-        {/* Action 2: Restore from GitHub */}
+        {/* Action 2: Upload Customers to GitHub */}
+        <button
+          type="button"
+          disabled={isUploadingCustomers}
+          onClick={handleUploadCustomersNow}
+          className="p-4 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 hover:border-purple-500/40 transition-all text-right flex flex-col justify-between gap-3 group active:scale-[0.98] disabled:opacity-50"
+        >
+          <div className="flex items-center justify-between w-full">
+            <span className="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Users className={`w-5 h-5 ${isUploadingCustomers ? 'animate-bounce' : ''}`} />
+            </span>
+            <span className="text-[10px] font-mono font-bold text-purple-400 bg-purple-950/80 px-2 py-0.5 rounded-full border border-purple-500/30">
+              سجل العملاء
+            </span>
+          </div>
+          <div>
+            <div className="text-xs font-bold text-white group-hover:text-purple-300 transition-colors">
+              {isUploadingCustomers ? 'جارٍ حفظ العملاء...' : 'حفظ العملاء على GitHub'}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              حفظ سجل العملاء ونقاط الولاء بالمستودع
+            </div>
+          </div>
+        </button>
+
+        {/* Action 3: Restore from GitHub */}
         <button
           type="button"
           disabled={isRestoring}
@@ -338,7 +386,7 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
           </div>
         </button>
 
-        {/* Action 3: Download Backup File (Zero-Token Safe) */}
+        {/* Action 4: Download Backup File (Zero-Token Safe) */}
         <button
           type="button"
           onClick={() => downloadBackupJsonFile(products)}

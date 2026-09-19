@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ShieldCheck,
@@ -9,6 +9,7 @@ import {
   Sparkles,
   ShoppingBag,
   FileText,
+  FileSpreadsheet,
   Users,
   Bell,
   Plus,
@@ -52,6 +53,7 @@ import { EZABY_TOP_PRODUCTS } from '../data/ezabyCatalog';
 import { GeminiProductStudio } from './GeminiProductStudio';
 import { GoogleDriveModal } from './GoogleDriveModal';
 import { CustomersManager } from './CustomersManager';
+import { ExcelProductImporter } from './ExcelProductImporter';
 import {
   syncAddProductToFirestore,
   syncDeleteProductFromFirestore,
@@ -300,9 +302,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
 
-  // Active Hub Navigation Tab
-  const [activeTab, setActiveTab] = useState<'github' | 'products' | 'broadcast' | 'customers' | 'drive' | 'branding'>('github');
+  // Active Hub Navigation Tab - Default to 'products' for immediate inventory management
+  const [activeTab, setActiveTab] = useState<'products' | 'customers' | 'broadcast' | 'github' | 'drive' | 'branding'>('products');
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
+  const [isAddFormHighlighted, setIsAddFormHighlighted] = useState(false);
+  const productFormRef = useRef<HTMLDivElement>(null);
   const [portalLogo, setPortalLogo] = useState<string>(() => getStoredLogo() || '/eldeeb_pharmacy_logo.jpg');
   const [portalLogoSuccess, setPortalLogoSuccess] = useState(false);
 
@@ -706,6 +711,42 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     }
   };
 
+  // Scroll to manual product add form
+  const handleScrollToAddProduct = () => {
+    setActiveTab('products');
+    resetProductForm();
+    setIsAddFormHighlighted(true);
+    setTimeout(() => {
+      productFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    setTimeout(() => {
+      setIsAddFormHighlighted(false);
+    }, 3000);
+  };
+
+  // Handle Complete Excel / CSV Bulk Import
+  const handleExcelImportComplete = async (importedList: Product[], mode: 'merge' | 'replace') => {
+    if (mode === 'replace' && onClearAllProducts) {
+      onClearAllProducts();
+      syncClearAllFirestoreProducts();
+    }
+
+    if (onBatchImportProducts) {
+      await onBatchImportProducts(importedList);
+    } else {
+      for (const p of importedList) {
+        await onAddProduct(p);
+      }
+    }
+
+    setActiveTab('products');
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.6 },
+    });
+  };
+
   // Broadcast push notification
   const handleSendBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
@@ -910,22 +951,50 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           </motion.div>
         </div>
       ) : (
-        /* Authenticated Dashboard & GitHub Multi-App Hub */
+        /* Authenticated Dashboard & Pharmacy Management Hub */
         <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+          {/* Top Quick Actions Bar for Medicine & Stock Management */}
+          <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-slate-700/80 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 shadow-inner">
+                <Package className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-black text-white">إدارة مخزون وأصناف صيدلية الديب</h2>
+                  <span className="text-xs bg-cyan-500/20 text-cyan-300 font-bold px-2.5 py-0.5 rounded-full border border-cyan-500/30">
+                    {products.length.toLocaleString('ar-EG')} صنف مسجل
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  أضف صنفاً يدوياً أو استورد كشف أدوية الصيدلية بالكامل (Excel/CSV حتى 25,000+ صنف) بدفعة واحدة.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+              <button
+                type="button"
+                onClick={handleScrollToAddProduct}
+                className="flex-1 sm:flex-initial px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs sm:text-sm font-black shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-2 transition-all active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ إضافة صنف دوائي جديد</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsExcelModalOpen(true)}
+                className="flex-1 sm:flex-initial px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-black shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all active:scale-95"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+                <span>استيراد كشف Excel / CSV (حتى 25 ألف صنف)</span>
+              </button>
+            </div>
+          </div>
+
           {/* Main Navigation Tabs */}
           <div className="flex border-b border-slate-800 bg-slate-900/60 p-1.5 rounded-2xl gap-2 overflow-x-auto scrollbar-none shadow-sm">
-            <button
-              onClick={() => setActiveTab('github')}
-              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                activeTab === 'github'
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Code2 className="w-4 h-4" />
-              <span>مركز تطبيقات GitHub والتعديل اللحظي ({githubApps.length})</span>
-            </button>
-
             <button
               onClick={() => setActiveTab('products')}
               className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
@@ -936,6 +1005,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             >
               <Package className="w-4 h-4" />
               <span>كتالوج ومخزون الأدوية ({products.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('customers')}
+              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+                activeTab === 'customers'
+                  ? 'bg-cyan-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>العملاء ونقاط الولاء ({customersList.length})</span>
             </button>
 
             <button
@@ -951,15 +1032,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </button>
 
             <button
-              onClick={() => setActiveTab('customers')}
+              onClick={() => setActiveTab('github')}
               className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                activeTab === 'customers'
+                activeTab === 'github'
                   ? 'bg-cyan-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
-              <Users className="w-4 h-4" />
-              <span>العملاء ونقاط الولاء ({customersList.length})</span>
+              <Code2 className="w-4 h-4" />
+              <span>مركز تطبيقات GitHub والتعديل اللحظي ({githubApps.length})</span>
             </button>
 
             <button
@@ -1255,23 +1336,45 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           {activeTab === 'products' && (
             <div className="space-y-6">
               {/* Products Header */}
-              <div className="p-5 bg-slate-900 border border-slate-800 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="p-5 bg-slate-900 border border-slate-800 rounded-3xl flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                     <Package className="w-5 h-5 text-cyan-400" />
                     <span>إدارة كتالوج الأدوية والمخزون</span>
+                    <span className="text-xs bg-slate-800 text-cyan-300 px-2.5 py-0.5 rounded-full border border-slate-700">
+                      {products.length.toLocaleString('ar-EG')} صنف
+                    </span>
                   </h2>
-                  <p className="text-xs text-slate-400">
-                    أضف أو عدّل الأصناف، حدد نقاط الولاء، استخدم كاميرا جيميناي لتصوير العبوات، وأزل الأصناف التجريبية.
+                  <p className="text-xs text-slate-400 mt-1">
+                    أضف أو عدّل الأصناف، ارفع كشف أدوية كامل (Excel/CSV حتى 25,000 صنف)، وحدد الأسعار ونقاط الولاء.
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleScrollToAddProduct}
+                    className="px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ إضافة صنف يدوياً</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsExcelModalOpen(true)}
+                    className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95"
+                    title="استيراد ملف إكسل أو كشف أدوية حتى 25,000 صنف"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+                    <span>استيراد كشف Excel / CSV (حتى 25 ألف صنف)</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={handleImportEzabyCatalog}
                     disabled={isImportingEzaby}
-                    className={`px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95 ${
+                    className={`px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs border border-slate-700 flex items-center gap-1.5 transition-all ${
                       isImportingEzaby ? 'opacity-70 cursor-wait' : ''
                     }`}
                     title="تحميل باقة أصناف العزبي الأكثر طلباً ومبيعاً في الصيدليات المصرية"
@@ -1284,14 +1387,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     <span>
                       {isImportingEzaby
                         ? 'جارٍ الاستيراد والحفظ...'
-                        : `استيراد كتالوج العزبي الأكثر طلباً (${EZABY_TOP_PRODUCTS.length} صنفاً)`}
+                        : `استيراد كتالوج العزبي (${EZABY_TOP_PRODUCTS.length})`}
                     </span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleRemoveDemoProducts}
-                    className="px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 rounded-xl font-bold text-xs border border-rose-800/60 flex items-center gap-1.5 transition-colors"
+                    className="px-3 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 rounded-xl font-bold text-xs border border-rose-800/60 flex items-center gap-1.5 transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>حذف الأصناف التجريبية</span>
@@ -1307,7 +1410,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               )}
 
               {/* Product Form */}
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
+              <div
+                ref={productFormRef}
+                id="admin-add-product-form"
+                className={`bg-slate-900 border rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl transition-all duration-500 ${
+                  isAddFormHighlighted
+                    ? 'border-cyan-400 ring-4 ring-cyan-500/30 scale-[1.005]'
+                    : 'border-slate-800'
+                }`}
+              >
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
                     {editingProductId ? <Edit3 className="w-4 h-4 text-amber-400" /> : <Plus className="w-4 h-4 text-cyan-400" />}
@@ -2280,6 +2391,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Excel / CSV Large-Scale Pharmacy Inventory Importer Modal */}
+      {isExcelModalOpen && (
+        <ExcelProductImporter
+          isOpen={isExcelModalOpen}
+          onClose={() => setIsExcelModalOpen(false)}
+          existingProducts={products}
+          onImportComplete={handleExcelImportComplete}
+        />
+      )}
     </div>
   );
 };

@@ -410,6 +410,101 @@ export async function uploadBackupToGitHub(
 }
 
 /**
+ * Upload & commit dedicated Customers & Loyalty points backup to GitHub
+ */
+export async function uploadCustomersBackupToGitHub(
+  customCustomers?: Customer[],
+  overrideConfig?: Partial<GitHubBackupConfig>
+): Promise<{ success: boolean; commitUrl?: string; error?: string }> {
+  const cfg = { ...getGitHubBackupConfig(), ...(overrideConfig || {}) };
+  const token = sanitizeGitHubToken(cfg.token);
+
+  if (!token) {
+    saveGitHubBackupConfig({
+      lastCustomerBackupStatus: 'error',
+      lastCustomerBackupMessage: 'رمز الوصول الشخصي لـ GitHub غير مدخل',
+    });
+    return {
+      success: false,
+      error: 'يرجى إدخال رمز الوصول الشخصي لـ GitHub (Token) في إعدادات النسخ الاحتياطي.',
+    };
+  }
+
+  const payload = generateCustomersBackupPayload(customCustomers);
+  const jsonContent = JSON.stringify(payload, null, 2);
+  const base64Content = utf8ToBase64(jsonContent);
+
+  const repoClean = cfg.repo.trim().replace(/^https:\/\/github\.com\//, '').replace(/\/$/, '');
+  if (!repoClean.includes('/')) {
+    return { success: false, error: 'اسم المستودع يجب أن يكون بصيغة username/repository' };
+  }
+
+  const branch = cfg.branch.trim() || 'main';
+  const filePath = cfg.customerFilePath?.trim() || 'eldeeb_customers_backup.json';
+  const apiUrl = `https://api.github.com/repos/${repoClean}/contents/${filePath}`;
+
+  try {
+    let fileSha: string | undefined;
+    const existingRes = await fetch(`${apiUrl}?ref=${branch}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+
+    if (existingRes.ok) {
+      const existingData = await existingRes.json();
+      fileSha = existingData.sha;
+    }
+
+    const commitBody: any = {
+      message: `حفظ بيانات عملاء الصيدلية ونقاط الولاء - ${payload.totalCustomers} عميل [${new Date().toISOString().slice(0, 10)}]`,
+      content: base64Content,
+      branch,
+    };
+
+    if (fileSha) {
+      commitBody.sha = fileSha;
+    }
+
+    const commitRes = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(commitBody),
+    });
+
+    if (!commitRes.ok) {
+      const errData = await commitRes.json().catch(() => ({}));
+      throw new Error(errData.message || `فشل حفظ ملف العملاء على GitHub (كود: ${commitRes.status})`);
+    }
+
+    const commitData = await commitRes.json();
+    const updatedTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    saveGitHubBackupConfig({
+      lastCustomerBackupAt: updatedTime,
+      lastCustomerBackupStatus: 'success',
+      lastCustomerBackupMessage: `تم حفظ بيانات العملاء بنجاح على GitHub (${payload.totalCustomers} عميل)`,
+    });
+
+    return {
+      success: true,
+      commitUrl: commitData.commit?.html_url || `https://github.com/${repoClean}/blob/${branch}/${filePath}`,
+    };
+  } catch (err: any) {
+    console.error('GitHub customer backup error:', err);
+    saveGitHubBackupConfig({
+      lastCustomerBackupStatus: 'error',
+      lastCustomerBackupMessage: err?.message || 'فشل الاتصال بـ GitHub',
+    });
+    return { success: false, error: err?.message || 'فشل الاتصال بـ GitHub' };
+  }
+}
+
+/**
  * Fetch and restore backup from GitHub (Raw URL or Repository)
  */
 export async function restoreFromGitHubBackup(

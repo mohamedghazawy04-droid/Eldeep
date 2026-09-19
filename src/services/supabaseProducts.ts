@@ -171,9 +171,39 @@ export function subscribeToSupabaseProducts(
   };
 }
 
-export async function upsertSupabaseProducts(products: Product[]): Promise<{ success: boolean; error?: string }> {
-  if (!isSupabaseReady) return { success: false, error: 'Supabase غير مُعد' };
-  if (products.length === 0) return { success: true };
-  const { error } = await supabase.from(TABLE).upsert(products.map(productToSupabaseRow), { onConflict: 'id' });
-  return error ? { success: false, error: error.message } : { success: true };
+export async function upsertSupabaseProducts(
+  products: Product[],
+  onProgress?: (uploadedCount: number, totalCount: number) => void
+): Promise<{ success: boolean; count: number; error?: string }> {
+  if (!isSupabaseReady) return { success: false, count: 0, error: 'Supabase غير مُعد' };
+  if (products.length === 0) return { success: true, count: 0 };
+
+  const BATCH_SIZE = 200;
+  let uploaded = 0;
+  try {
+    for (let i = 0; i < products.length; i += BATCH_SIZE) {
+      const chunk = products.slice(i, i + BATCH_SIZE);
+      const rows = chunk.map(productToSupabaseRow);
+      const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: 'id' });
+      if (error) {
+        console.error(`Batch upsert error at index ${i}:`, error);
+        return {
+          success: false,
+          count: uploaded,
+          error: `خطأ أثناء حفظ الدفعة (${i + 1} - ${i + chunk.length}): ${error.message}`,
+        };
+      }
+      uploaded += chunk.length;
+      if (onProgress) {
+        onProgress(uploaded, products.length);
+      }
+    }
+    return { success: true, count: uploaded };
+  } catch (err: any) {
+    return {
+      success: false,
+      count: uploaded,
+      error: err?.message || 'فشل رفع الأصناف إلى السحابة',
+    };
+  }
 }

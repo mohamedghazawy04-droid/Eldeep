@@ -21,6 +21,7 @@ import {
   Gift,
   Mail,
   CheckCircle2,
+  Github,
 } from 'lucide-react';
 import { Customer, LoyaltyTier } from '../types';
 import { openWhatsApp, formatWhatsAppUrl } from '../services/whatsapp';
@@ -38,6 +39,7 @@ import {
   fetchSupabaseCustomers,
   upsertSupabaseCustomer,
 } from '../services/supabaseCustomers';
+import { uploadCustomersBackupToGitHub } from '../services/githubBackup';
 
 interface CustomersManagerProps {
   isDarkTheme?: boolean;
@@ -63,6 +65,7 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isUploadingToGitHub, setIsUploadingToGitHub] = useState(false);
 
   // Load the shared customer directory from Supabase (manager-only RLS policy).
   useEffect(() => {
@@ -81,6 +84,23 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
     setTimeout(() => {
       setToastMessage(null);
     }, 3000);
+  };
+
+  // Upload Customers to GitHub Repository
+  const handleUploadCustomersToGitHub = async () => {
+    setIsUploadingToGitHub(true);
+    try {
+      const res = await uploadCustomersBackupToGitHub(customers);
+      if (res.success) {
+        showToast(`تم رفع بيانات ${customers.length} عميل إلى مستودع GitHub بنجاح! 🚀`);
+      } else {
+        showToast(`تعذر الرفع إلى GitHub: ${res.error}`);
+      }
+    } catch (err: any) {
+      showToast(`خطأ في الاتصال: ${err?.message || 'تعذر الاتصال بخوادم GitHub'}`);
+    } finally {
+      setIsUploadingToGitHub(false);
+    }
   };
 
   // Manual Email Verification toggle by Admin
@@ -355,6 +375,20 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
 
           {/* Action Buttons */}
           <div className="flex items-center flex-wrap gap-2 w-full md:w-auto justify-end">
+            <button
+              onClick={handleUploadCustomersToGitHub}
+              disabled={isUploadingToGitHub}
+              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm border border-slate-700 transition-transform active:scale-95 disabled:opacity-50"
+              title="رفع وحفظ بيانات العملاء بالكامل على مستودع GitHub لضمان عدم ضياعها"
+            >
+              {isUploadingToGitHub ? (
+                <RefreshCw className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+              ) : (
+                <Github className="w-3.5 h-3.5 text-cyan-400" />
+              )}
+              <span>{isUploadingToGitHub ? 'جارٍ الرفع...' : 'حفظ العملاء على GitHub'}</span>
+            </button>
+
             <button
               onClick={() => exportCustomersAsCsv(customers)}
               className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
