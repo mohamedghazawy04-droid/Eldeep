@@ -731,7 +731,7 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
                     required
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
-                    placeholder="مثال: محمد السيد"
+                    placeholder="XXXX XXXX (اسم العميل)"
                     className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-sky-500 font-medium"
                   />
                 </div>
@@ -745,7 +745,7 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
                     required
                     value={formPhone}
                     onChange={(e) => setFormPhone(e.target.value)}
-                    placeholder="010XXXXXXXX"
+                    placeholder="01xxxxxxxxx"
                     className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-sky-500 font-mono"
                   />
                 </div>
@@ -783,7 +783,7 @@ export const CustomersManager: React.FC<CustomersManagerProps> = ({ isDarkTheme 
                     type="text"
                     value={formAddress}
                     onChange={(e) => setFormAddress(e.target.value)}
-                    placeholder="مثال: دمنهور - شارع الجمهورية"
+                    placeholder="XXXX (المدينة أو العنوان)"
                     className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-sky-500 font-medium"
                   />
                 </div>

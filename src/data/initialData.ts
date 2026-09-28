@@ -1,5 +1,4 @@
 import { Product, ProductCategory } from '../types';
-import { EZABY_TOP_PRODUCTS } from './ezabyCatalog';
 
 export interface CategoryInfo {
   id: ProductCategory;
@@ -69,8 +68,9 @@ export const CATEGORIES: CategoryInfo[] = [
   },
 ];
 
-// Curated catalog of top-selling pharmacy products (medicines, vitamins, skincare, baby care, medical devices)
-export const INITIAL_PRODUCTS: Product[] = EZABY_TOP_PRODUCTS;
+// Products catalog starts completely empty as requested by user.
+// Inventory is populated manually or uploaded via Excel/CSV only.
+export const INITIAL_PRODUCTS: Product[] = [];
 
 export const INITIAL_NOTIFICATIONS = [
   {

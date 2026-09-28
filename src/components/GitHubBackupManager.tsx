@@ -67,10 +67,17 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
     try {
       const res = await testGitHubConnection(config);
       if (res.success) {
-        setStatusMsg({
-          type: 'success',
-          text: `تم الاتصال بنجاح بحساب GitHub: @${res.user}${res.repoExists ? ' (والمستودع موجود وجاهز)' : ' (تأكد من إنشاء المستودع المحدد)'}`,
-        });
+        if (res.error) {
+          setStatusMsg({
+            type: 'error',
+            text: `تم التعرف على الحساب @${res.user}، ولكن: ${res.error}`,
+          });
+        } else {
+          setStatusMsg({
+            type: 'success',
+            text: `تم الاتصال بنجاح بحساب GitHub: @${res.user}${res.repoExists ? ' (المستودع موجود والصلاحيات كاملة 100%)' : ''}`,
+          });
+        }
       } else {
         setStatusMsg({ type: 'error', text: res.error || 'فشل الاتصال بـ GitHub' });
       }
@@ -217,7 +224,7 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
                 مستودعك الجاهز هو: <a href="https://github.com/mohamedghazawy04-droid/Eldeep" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-mono font-bold">mohamedghazawy04-droid/Eldeep</a>.
               </li>
               <li>
-                <strong>إنشاء الرمز في خطوة واحدة سريعة:</strong> اضغط على هذا الرابط المباشر: <a href="https://github.com/settings/tokens/new?scopes=repo&description=Eldeep-Pharmacy-Sync" target="_blank" rel="noreferrer" className="text-amber-400 underline font-bold">إنشاء الرمز المجهّز على GitHub</a> (سيتم تفعيل صلاحية <code className="text-emerald-300 bg-slate-800 px-1.5 py-0.5 rounded">repo</code> تلقائياً، فقط اضغط Generate Token في أسفل الصفحة وانسخه).
+                <strong>إنشاء الرمز:</strong> اضغط على: <a href={`https://github.com/settings/tokens/new?scopes=repo&description=Eldeep-Pharmacy-${Date.now().toString().slice(-4)}`} target="_blank" rel="noreferrer" className="text-amber-400 underline font-bold">إنشاء الرمز المجهّز على GitHub</a> (إذا ظهر لك <em>Note has already been taken</em> فقط قم بتغيير اسم خانة <strong>Note</strong> لأي رقم أو كلمة أخرى مثل <code className="text-cyan-300 bg-slate-800 px-1 rounded">Eldeep-2026</code>).
               </li>
               <li>
                 الصق الرمز في خانة "رمز الوصول الشخصي" بالأسفل واضغط <strong>حفظ واختبار الاتصال</strong>.
@@ -251,17 +258,34 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
             )}
             <span className="leading-relaxed">{statusMsg.text}</span>
           </div>
-          <div className="flex items-center gap-2.5 flex-shrink-0 mr-auto sm:mr-0">
+          <div className="flex items-center gap-2 flex-shrink-0 mr-auto sm:mr-0 flex-wrap">
             {statusMsg.type === 'error' && (
-              <a
-                href="https://github.com/settings/tokens/new?scopes=repo&description=Eldeep-Pharmacy-Sync"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
-              >
-                <span>إنشاء رمز جديد غير منتهي</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+              <>
+                <a
+                  href={`https://github.com/settings/tokens/new?scopes=repo&description=Eldeep-Pharmacy-${Date.now().toString().slice(-4)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
+                >
+                  <span>توليد رمز جديد بصلاحية repo</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setShowSettings(true)}
+                  className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-2.5 py-1.5 rounded-xl transition-colors border border-slate-700"
+                >
+                  فتح خانة الرمز
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusMsg(null)}
+                  className="text-[11px] text-slate-400 hover:text-white px-2 py-1"
+                  title="إخفاء التنبيه"
+                >
+                  ✕
+                </button>
+              </>
             )}
             {statusMsg.link && (
               <a
@@ -515,7 +539,7 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
                   <span>رمز الوصول الشخصي (GitHub Personal Access Token - PAT) *</span>
                 </span>
                 <a
-                  href="https://github.com/settings/tokens/new?scopes=repo&description=Eldeep-Pharmacy-Sync"
+                  href={`https://github.com/settings/tokens/new?scopes=repo&description=Eldeep-Pharmacy-${Date.now().toString().slice(-4)}`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-[11px] text-amber-400 hover:text-amber-300 underline font-bold flex items-center gap-1"
@@ -579,10 +603,16 @@ export const GitHubBackupManager: React.FC<GitHubBackupManagerProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => handleSaveConfig(config)}
-                className="px-5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+                disabled={isTesting}
+                onClick={async () => {
+                  handleSaveConfig(config);
+                  if (config.token.trim()) {
+                    await handleTestConnection();
+                  }
+                }}
+                className="px-5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 text-white rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-50"
               >
-                حفظ الإعدادات
+                {isTesting ? 'جارٍ فحص الرمز...' : 'حفظ واختبار الاتصال'}
               </button>
             </div>
           </motion.div>

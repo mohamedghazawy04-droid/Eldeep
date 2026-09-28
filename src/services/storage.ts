@@ -3,7 +3,8 @@ import { INITIAL_NOTIFICATIONS, INITIAL_PRODUCTS } from '../data/initialData';
 import { getIdbItem, setIdbItem, removeIdbItem } from './indexedDb';
 
 const STORAGE_KEYS = {
-  PRODUCTS: 'eldeeb_pharmacy_products_v1',
+  PRODUCTS: 'eldeeb_pharmacy_products_v2',
+  LEGACY_PRODUCTS_V1: 'eldeeb_pharmacy_products_v1',
   CUSTOMER: 'eldeeb_pharmacy_active_customer_v1',
   ALL_CUSTOMERS: 'eldeeb_pharmacy_customers_list_v1',
   ORDERS: 'eldeeb_pharmacy_orders_v1',
@@ -17,6 +18,17 @@ const STORAGE_KEYS = {
 
 // In-memory cache for ultra-fast access and safeguarding against quota limits
 let memoryProductsCache: Product[] | null = null;
+
+// Clean up any legacy v1 catalog to guarantee clean slate empty catalog
+try {
+  if (typeof localStorage !== 'undefined') {
+    if (localStorage.getItem(STORAGE_KEYS.LEGACY_PRODUCTS_V1)) {
+      localStorage.removeItem(STORAGE_KEYS.LEGACY_PRODUCTS_V1);
+    }
+  }
+} catch {
+  // Ignore
+}
 
 export function recalculateProductLoyaltyPoints(price: number): number {
   if (!price || price <= 0) return 0;
@@ -79,28 +91,27 @@ function saveProductsToLocalStorage(products: Product[]): void {
 
 export function getStoredProducts(): Product[] {
   // 1. Check in-memory cache first
-  if (memoryProductsCache && memoryProductsCache.length > 0) {
+  if (memoryProductsCache !== null) {
     return memoryProductsCache;
+  }
+
+  // If catalog was explicitly cleared by user, return empty catalog
+  try {
+    if (localStorage.getItem('eldeeb_catalog_explicitly_cleared_v1') === 'true') {
+      memoryProductsCache = [];
+      return [];
+    }
+  } catch {
+    // Ignore
   }
 
   // 2. Read from localStorage
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (saved) {
+    if (saved !== null) {
       const parsed: Product[] = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Automatically enrich with missing catalog items if previously limited (e.g. old 36 items)
-        let enriched = parsed;
-        if (INITIAL_PRODUCTS && parsed.length < INITIAL_PRODUCTS.length) {
-          const existingIds = new Set(parsed.map((p) => p.id));
-          const missingCatalogProducts = INITIAL_PRODUCTS.filter((p) => !existingIds.has(p.id));
-          if (missingCatalogProducts.length > 0) {
-            enriched = [...parsed, ...missingCatalogProducts];
-            saveProductsToLocalStorage(enriched);
-            setIdbItem(STORAGE_KEYS.PRODUCTS, enriched).catch(() => {});
-          }
-        }
-        const calibrated = ensureProductLoyaltySystem(enriched);
+      if (Array.isArray(parsed)) {
+        const calibrated = ensureProductLoyaltySystem(parsed);
         memoryProductsCache = calibrated;
         return calibrated;
       }
@@ -109,15 +120,8 @@ export function getStoredProducts(): Product[] {
     // Ignore parse or read error
   }
 
-  // 3. Fallback to Initial Curated Pharmacy Catalog (El Ezaby / top products)
-  if (INITIAL_PRODUCTS && INITIAL_PRODUCTS.length > 0) {
-    const calibrated = ensureProductLoyaltySystem(INITIAL_PRODUCTS);
-    memoryProductsCache = calibrated;
-    saveProductsToLocalStorage(calibrated);
-    setIdbItem(STORAGE_KEYS.PRODUCTS, calibrated).catch(() => {});
-    return calibrated;
-  }
-
+  // Default to empty catalog so user can build inventory selectively
+  memoryProductsCache = [];
   return [];
 }
 
@@ -126,19 +130,13 @@ export function getStoredProducts(): Product[] {
  */
 export async function loadProductsFromIndexedDb(): Promise<Product[] | null> {
   try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('eldeeb_catalog_explicitly_cleared_v1') === 'true') {
+      memoryProductsCache = [];
+      return [];
+    }
     const idbProducts = await getIdbItem<Product[]>(STORAGE_KEYS.PRODUCTS);
-    if (idbProducts && Array.isArray(idbProducts) && idbProducts.length > 0) {
-      let enriched = idbProducts;
-      if (INITIAL_PRODUCTS && idbProducts.length < INITIAL_PRODUCTS.length) {
-        const existingIds = new Set(idbProducts.map((p) => p.id));
-        const missingCatalogProducts = INITIAL_PRODUCTS.filter((p) => !existingIds.has(p.id));
-        if (missingCatalogProducts.length > 0) {
-          enriched = [...idbProducts, ...missingCatalogProducts];
-          saveProductsToLocalStorage(enriched);
-          setIdbItem(STORAGE_KEYS.PRODUCTS, enriched).catch(() => {});
-        }
-      }
-      const calibrated = ensureProductLoyaltySystem(enriched);
+    if (idbProducts && Array.isArray(idbProducts)) {
+      const calibrated = ensureProductLoyaltySystem(idbProducts);
       memoryProductsCache = calibrated;
       return calibrated;
     }
@@ -151,17 +149,35 @@ export async function loadProductsFromIndexedDb(): Promise<Product[] | null> {
 export function clearAllProducts(): void {
   memoryProductsCache = [];
   try {
-    localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, '[]');
+    localStorage.removeItem(STORAGE_KEYS.LEGACY_PRODUCTS_V1);
+    localStorage.setItem('eldeeb_catalog_explicitly_cleared_v1', 'true');
   } catch {
     // Ignore
   }
   removeIdbItem(STORAGE_KEYS.PRODUCTS).catch(() => {});
+  removeIdbItem(STORAGE_KEYS.LEGACY_PRODUCTS_V1).catch(() => {});
+  setIdbItem(STORAGE_KEYS.PRODUCTS, []).catch(() => {});
 }
 
 export function saveProducts(products: Product[]): void {
   const calibrated = ensureProductLoyaltySystem(products);
   // 1. In-memory cache
   memoryProductsCache = calibrated;
+
+  if (calibrated.length > 0) {
+    try {
+      localStorage.removeItem('eldeeb_catalog_explicitly_cleared_v1');
+    } catch {
+      // Ignore
+    }
+  } else {
+    try {
+      localStorage.setItem('eldeeb_catalog_explicitly_cleared_v1', 'true');
+    } catch {
+      // Ignore
+    }
+  }
 
   // 2. IndexedDB (stores complete catalog including full-resolution images)
   setIdbItem(STORAGE_KEYS.PRODUCTS, calibrated).catch(() => {});

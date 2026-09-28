@@ -72,11 +72,8 @@ export function subscribeToFirestoreProducts(
       productsRef,
       async (snapshot) => {
         if (snapshot.empty) {
-          const stored = getStoredProducts();
-          if (stored && stored.length > 0) {
-            onUpdate(stored);
-            syncBatchUploadProductsToFirestore(stored).catch(() => {});
-          }
+          saveProducts([]);
+          onUpdate([]);
           return;
         }
 
@@ -88,17 +85,13 @@ export function subscribeToFirestoreProducts(
           }
         });
 
-        if (items.length > 0) {
-          saveProducts(items);
-          onUpdate(items);
-        }
+        saveProducts(items);
+        onUpdate(items);
       },
       (error) => {
         console.warn('Firestore products listener notification:', error);
         const stored = getStoredProducts();
-        if (stored.length > 0) {
-          onUpdate(stored);
-        }
+        onUpdate(stored);
       }
     );
 

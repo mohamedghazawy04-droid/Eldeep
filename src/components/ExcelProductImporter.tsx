@@ -226,8 +226,8 @@ export const ExcelProductImporter: React.FC<ExcelProductImporterProps> = ({
           findValue(row, ['الصورة', 'صورة', 'image', 'picture', 'photo', 'img']) || '/eldeeb_logo.jpg'
         ).trim();
 
-        // Loyalty Points (10 points per 1 EGP)
-        const pointsVal = Math.round(priceVal * 10);
+        // Loyalty Points (1 point per 100 EGP = price / 100)
+        const pointsVal = Number((priceVal / 100).toFixed(2));
 
         // ID: Barcode or clean ID
         const barcodeVal = String(

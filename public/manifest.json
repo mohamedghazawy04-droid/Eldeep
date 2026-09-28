@@ -1,0 +1,24 @@
+{
+  "name": "صيدلية الديب - El Deeb Pharmacy",
+  "short_name": "صيدلية الديب",
+  "description": "منصة صيدلية الديب الرقمية: تسوق الأدوية والمستلزمات، إرسال الروشتة عبر الواتساب، نظام نقاط الولاء",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#0284c7",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/eldeeb_logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/eldeeb_logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

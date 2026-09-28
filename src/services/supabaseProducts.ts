@@ -135,6 +135,16 @@ export async function deleteSupabaseProduct(id: string): Promise<{ success: bool
   return error ? { success: false, error: error.message } : { success: true };
 }
 
+export async function clearAllSupabaseProducts(): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseReady) return { success: false, error: 'Supabase غير مُعد' };
+  try {
+    const { error } = await supabase.from(TABLE).delete().neq('id', '___NEVER_MATCH___');
+    return error ? { success: false, error: error.message } : { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'فشل مسح المنتجات من السحابة' };
+  }
+}
+
 export function subscribeToSupabaseProducts(
   onUpdate: (products: Product[]) => void,
   includeUnavailable = false

@@ -552,7 +552,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                         setPatientName(e.target.value);
                         if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
                       }}
-                      placeholder="مثال: محمد السيد"
+                      placeholder="XXXX XXXX (الاسم بالكامل)"
                       className={`w-full pr-9 pl-3 py-2.5 rounded-xl text-xs sm:text-sm font-medium outline-none transition-colors ${
                         errors.name
                           ? 'border-2 border-rose-500 bg-rose-50/80 dark:bg-rose-950/50 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/20'
@@ -588,7 +588,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                         setPatientPhone(e.target.value);
                         if (errors.phone) setErrors((prev) => ({ ...prev, phone: undefined }));
                       }}
-                      placeholder="010XXXXXXXX"
+                      placeholder="01xxxxxxxxx"
                       className={`w-full pr-9 pl-3 py-2.5 rounded-xl text-xs sm:text-sm font-medium outline-none transition-colors ${
                         errors.phone
                           ? 'border-2 border-rose-500 bg-rose-50/80 dark:bg-rose-950/50 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/20'
@@ -627,7 +627,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                     type="text"
                     value={patientAddress}
                     onChange={(e) => setPatientAddress(e.target.value)}
-                    placeholder="المنطقة، اسم الشارع، رقم العمارة، الدور"
+                    placeholder="XXXX (المنطقة، اسم الشارع، رقم العمارة، الدور)"
                     className="w-full pr-9 pl-3 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs sm:text-sm font-medium border border-transparent focus:border-sky-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition-colors"
                   />
                 </div>

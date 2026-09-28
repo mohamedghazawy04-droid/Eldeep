@@ -215,6 +215,7 @@ export async function testGitHubConnection(config?: Partial<GitHubBackupConfig>)
     });
 
     // If 401, retry with "token " scheme for classic tokens
+    let authHeaderPrefix = 'Bearer';
     if (!userRes.ok && userRes.status === 401) {
       userRes = await fetch('https://api.github.com/user', {
         headers: {
@@ -222,6 +223,9 @@ export async function testGitHubConnection(config?: Partial<GitHubBackupConfig>)
           Accept: 'application/vnd.github.v3+json',
         },
       });
+      if (userRes.ok) {
+        authHeaderPrefix = 'token';
+      }
     }
 
     if (!userRes.ok) {
@@ -229,24 +233,28 @@ export async function testGitHubConnection(config?: Partial<GitHubBackupConfig>)
         return {
           success: false,
           error:
-            'رمز الوصول غير صالح أو انتهت صلاحيته على GitHub. تأكد من نسخ الرمز كاملاً واختيار (No expiration) عند توليده.',
+            'رمز الوصول غير صالح أو تم إلغاؤه على GitHub. يرجى الضغط على رابط توليد الرمز وتوليد رمز جديد بصلاحية (repo) واختيار No Expiration ثم نسخه ولصقه هنا.',
         };
       }
-      return { success: false, error: `فشل التحقق من الحساب (كود: ${userRes.status})` };
+      return { success: false, error: `فشل التحقق من حساب GitHub (كود الخطأ: ${userRes.status})` };
     }
 
     const userData = await userRes.json();
+    const scopesHeader = userRes.headers.get('x-oauth-scopes') || '';
+    const hasRepoScope = scopesHeader.split(',').map((s) => s.trim()).some((s) => s === 'repo' || s.startsWith('repo:'));
 
     // 2. Verify repository if provided
     let repoExists = false;
+    let repoError: string | undefined;
     if (cfg.repo.trim()) {
       const repoClean = cfg.repo.trim().replace(/^https:\/\/github\.com\//, '').replace(/\/$/, '');
       let repoRes = await fetch(`https://api.github.com/repos/${repoClean}`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `${authHeaderPrefix} ${token}`,
           Accept: 'application/vnd.github.v3+json',
         },
       });
+
       if (!repoRes.ok && repoRes.status === 401) {
         repoRes = await fetch(`https://api.github.com/repos/${repoClean}`, {
           headers: {
@@ -255,13 +263,21 @@ export async function testGitHubConnection(config?: Partial<GitHubBackupConfig>)
           },
         });
       }
-      repoExists = repoRes.ok;
+
+      if (repoRes.ok) {
+        repoExists = true;
+      } else if (repoRes.status === 404) {
+        repoError = `المستودع "${repoClean}" غير موجود أو خاص (Private) ويحتاج لتفعيل خيار repo في الرمز للوصول إليه.`;
+      } else if (repoRes.status === 403) {
+        repoError = `تم حظر الوصول إلى المستودع "${repoClean}" بسبب نقص الصلاحيات. تأكد من تحديد صلاحية repo عند إنشاء الرمز.`;
+      }
     }
 
     return {
       success: true,
       user: userData.login || userData.name,
       repoExists,
+      error: repoError || (!hasRepoScope && scopesHeader ? 'تنبيه: الرمز تم إنشاؤه بدون صلاحية repo للكتابة في المستودعات' : undefined),
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'تعذر الاتصال بخوادم GitHub' };
@@ -349,12 +365,23 @@ export async function uploadBackupToGitHub(
   try {
     // 1. Check if file already exists to get its SHA (required for GitHub update)
     let fileSha: string | undefined;
-    const existingRes = await fetch(`${apiUrl}?ref=${branch}`, {
+    let authHeader = `Bearer ${token}`;
+    let existingRes = await fetch(`${apiUrl}?ref=${branch}`, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: authHeader,
         Accept: 'application/vnd.github.v3+json',
       },
     });
+
+    if (!existingRes.ok && existingRes.status === 401) {
+      authHeader = `token ${token}`;
+      existingRes = await fetch(`${apiUrl}?ref=${branch}`, {
+        headers: {
+          Authorization: authHeader,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      });
+    }
 
     if (existingRes.ok) {
       const existingData = await existingRes.json();
@@ -372,18 +399,36 @@ export async function uploadBackupToGitHub(
       commitBody.sha = fileSha;
     }
 
-    const commitRes = await fetch(apiUrl, {
+    let commitRes = await fetch(apiUrl, {
       method: 'PUT',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: authHeader,
         Accept: 'application/vnd.github.v3+json',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(commitBody),
     });
 
+    if (!commitRes.ok && commitRes.status === 401 && authHeader.startsWith('Bearer')) {
+      authHeader = `token ${token}`;
+      commitRes = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: authHeader,
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(commitBody),
+      });
+    }
+
     if (!commitRes.ok) {
       const errData = await commitRes.json().catch(() => ({}));
+      if (commitRes.status === 401 || commitRes.status === 403) {
+        throw new Error(
+          'تم رفض رفع التغييرات إلى GitHub بسبب انتهاء صلاحية رمز الوصول (Token) أو عدم تفعيل صلاحية (repo). يرجى الضغط على زر "إنشاء رمز جديد غير منتهي" بالأسفل واختيار No Expiration وتفعيل صلاحية repo ثم لصقه وحفظه.'
+        );
+      }
       throw new Error(errData.message || `فشل حفظ الملف على GitHub (كود: ${commitRes.status})`);
     }
 
@@ -445,12 +490,23 @@ export async function uploadCustomersBackupToGitHub(
 
   try {
     let fileSha: string | undefined;
-    const existingRes = await fetch(`${apiUrl}?ref=${branch}`, {
+    let authHeader = `Bearer ${token}`;
+    let existingRes = await fetch(`${apiUrl}?ref=${branch}`, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: authHeader,
         Accept: 'application/vnd.github.v3+json',
       },
     });
+
+    if (!existingRes.ok && existingRes.status === 401) {
+      authHeader = `token ${token}`;
+      existingRes = await fetch(`${apiUrl}?ref=${branch}`, {
+        headers: {
+          Authorization: authHeader,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      });
+    }
 
     if (existingRes.ok) {
       const existingData = await existingRes.json();
@@ -467,18 +523,36 @@ export async function uploadCustomersBackupToGitHub(
       commitBody.sha = fileSha;
     }
 
-    const commitRes = await fetch(apiUrl, {
+    let commitRes = await fetch(apiUrl, {
       method: 'PUT',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: authHeader,
         Accept: 'application/vnd.github.v3+json',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(commitBody),
     });
 
+    if (!commitRes.ok && commitRes.status === 401 && authHeader.startsWith('Bearer')) {
+      authHeader = `token ${token}`;
+      commitRes = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: authHeader,
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(commitBody),
+      });
+    }
+
     if (!commitRes.ok) {
       const errData = await commitRes.json().catch(() => ({}));
+      if (commitRes.status === 401 || commitRes.status === 403) {
+        throw new Error(
+          'تم رفض رفع بيانات العملاء إلى GitHub بسبب انتهاء صلاحية الرمز أو نقص صلاحية (repo). يرجى تجديد الرمز من الرابط المباشر.'
+        );
+      }
       throw new Error(errData.message || `فشل حفظ ملف العملاء على GitHub (كود: ${commitRes.status})`);
     }
 

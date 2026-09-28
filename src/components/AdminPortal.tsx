@@ -8,49 +8,45 @@ import {
   Package,
   Sparkles,
   ShoppingBag,
-  FileText,
   FileSpreadsheet,
   Users,
   Bell,
   Plus,
-  ExternalLink,
   Trash2,
   Edit3,
   LogOut,
   CheckCircle2,
   RefreshCw,
   Camera,
+  SwitchCamera,
+  Video,
+  VideoOff,
+  Wand2,
   AlertCircle,
   Database,
   Globe,
   Settings,
-  Layers,
-  Code2,
-  GitBranch,
-  GitCommit,
-  GitPullRequest,
-  Check,
-  Copy,
-  Terminal,
-  Play,
-  Save,
-  Sliders,
   Send,
   ArrowLeft,
   X,
-  Smartphone,
-  Server,
-  Zap,
   HardDrive,
   CloudUpload,
   Upload,
   ImageIcon,
-  RotateCcw,
+  Search,
+  Filter,
+  AlertTriangle,
+  Download,
+  Store,
+  Layers,
+  Check,
+  Percent,
+  SlidersHorizontal,
+  CloudCheck,
 } from 'lucide-react';
 import { Product, Customer, AppNotification, ProductCategory } from '../types';
 import { CATEGORIES } from '../data/initialData';
-import { EZABY_TOP_PRODUCTS } from '../data/ezabyCatalog';
-import { GeminiProductStudio } from './GeminiProductStudio';
+import { GeminiProductStudio, enhanceMedicinePhotoWithAI, StudioPreset } from './GeminiProductStudio';
 import { GoogleDriveModal } from './GoogleDriveModal';
 import { CustomersManager } from './CustomersManager';
 import { ExcelProductImporter } from './ExcelProductImporter';
@@ -64,227 +60,40 @@ import {
   subscribeToFirestoreLogo,
   fetchCustomersFromFirestore,
 } from '../services/firestoreSync';
-import { getStoredAllCustomers, getStoredOrders, getStoredPrescriptions, getStoredLogo, saveStoredLogo } from '../services/storage';
+import {
+  getStoredAllCustomers,
+  getStoredOrders,
+  getStoredPrescriptions,
+  getStoredLogo,
+  saveStoredLogo,
+  recalculateProductLoyaltyPoints,
+} from '../services/storage';
 import { optimizeProductImage } from '../utils/imageOptimizer';
-import { enrichProductsWithImages } from '../utils/productImageResolver';
+import { enrichProductsWithImages, resolveProductImage } from '../utils/productImageResolver';
 import { GitHubBackupManager } from './GitHubBackupManager';
-import { getGitHubBackupConfig } from '../services/githubBackup';
 import confetti from 'canvas-confetti';
 
-export interface GitHubAppItem {
-  id: string;
-  name: string;
-  nameEn: string;
-  repo: string;
-  branch: string;
-  category: string;
-  description: string;
-  liveUrl: string;
-  githubUrl: string;
-  lastCommitMessage: string;
-  lastCommitHash: string;
-  lastCommitTime: string;
-  status: 'active' | 'synced' | 'building';
-  config: {
-    appName: string;
-    version: string;
-    environment: 'production' | 'staging';
-    maintenanceMode: boolean;
-    whatsappHotline: string;
-    primaryColor: string;
-    features: {
-      aiPrescriptions: boolean;
-      realtimeSync: boolean;
-      pushNotifications: boolean;
-      vespaDelivery: boolean;
-    };
-    rawConfigJson: string;
-  };
-}
-
-interface AdminPortalProps {
+export interface AdminPortalProps {
   products: Product[];
   onAddProduct: (product: Product) => Promise<{ success: boolean; error?: string }> | void;
-  onDeleteProduct: (productId: string) => void;
+  onDeleteProduct: (productId: string) => Promise<void> | void;
   onUpdateProduct: (product: Product) => Promise<{ success: boolean; error?: string }> | void;
-  onClearAllProducts?: () => void;
-  onBatchImportProducts?: (products: Product[]) => void;
+  onClearAllProducts?: () => Promise<void> | void;
+  onRemoveUnavailableProducts?: () => Promise<number> | void;
+  onBatchImportProducts?: (products: Product[]) => Promise<number | void> | void;
   onBroadcastNotification: (title: string, message: string) => void;
   onBackToStore: () => void;
 }
 
-const DEFAULT_GITHUB_APPS: GitHubAppItem[] = [
-  {
-    id: 'app-eldeeb-pharmacy',
-    name: 'صيدلية الديب الإلكترونية',
-    nameEn: 'El-Deeb Pharmacy Store & PWA',
-    repo: 'mohamedghazawy04-droid/Eldeep',
-    branch: 'main',
-    category: 'متجر وتطبيق عملاء',
-    description: 'المتجر الإلكتروني الرئيسي، كتالوج الأدوية الذكي، طلبات الروشتات، ونظام الولاء السحابي.',
-    liveUrl: window.location.origin,
-    githubUrl: 'https://github.com/mohamedghazawy04-droid/Eldeep',
-    lastCommitMessage: 'feat: Update pharmacy branding and checkout flows',
-    lastCommitHash: '8f2a9c1',
-    lastCommitTime: 'منذ دقيقتين',
-    status: 'active',
-    config: {
-      appName: 'صيدلية الديب',
-      version: '2.4.0',
-      environment: 'production',
-      maintenanceMode: false,
-      whatsappHotline: '01009097378',
-      primaryColor: '#0284c7',
-      features: {
-        aiPrescriptions: true,
-        realtimeSync: true,
-        pushNotifications: true,
-        vespaDelivery: true,
-      },
-      rawConfigJson: JSON.stringify(
-        {
-          name: 'صيدلية الديب',
-          version: '2.4.0',
-          env: 'production',
-          whatsapp: '01009097378',
-          features: {
-            aiCameraStudio: true,
-            firestoreSync: true,
-            funnyVespaCaptain: true,
-            pushNotifications: true,
-          },
-          theme: {
-            primary: '#0284c7',
-            accent: '#10b981',
-            mode: 'auto',
-          },
-        },
-        null,
-        2
-      ),
-    },
-  },
-  {
-    id: 'app-pharma-erp',
-    name: 'نظام الحسابات ومخازن الأدوية ERP',
-    nameEn: 'Pharma ERP & Warehouse Inventory',
-    repo: 'mohamedghazawy04-droid/pharma-erp-sync',
-    branch: 'main',
-    category: 'إدارة ومخازن',
-    description: 'برنامج نقاط البيع الكاشير، الفواتير الضريبية، جرد النواقص وربط الشركات الموردة للأدوية.',
-    liveUrl: 'https://erp.eldeeb-pharma.com',
-    githubUrl: 'https://github.com/mohamedghazawy04-droid/pharma-erp-sync',
-    lastCommitMessage: 'fix(inventory): Auto-sync low stock medicines with distributor queue',
-    lastCommitHash: 'c4e107b',
-    lastCommitTime: 'اليوم، 11:20 ص',
-    status: 'synced',
-    config: {
-      appName: 'منظومة مخازن الديب ERP',
-      version: '3.1.2',
-      environment: 'production',
-      maintenanceMode: false,
-      whatsappHotline: '01009097378',
-      primaryColor: '#7c3aed',
-      features: {
-        aiPrescriptions: false,
-        realtimeSync: true,
-        pushNotifications: true,
-        vespaDelivery: false,
-      },
-      rawConfigJson: JSON.stringify(
-        {
-          name: 'Pharma ERP Engine',
-          version: '3.1.2',
-          autoReorderLowStock: true,
-          defaultMargin: 0.22,
-          backupSchedule: 'hourly',
-          edaSync: true,
-        },
-        null,
-        2
-      ),
-    },
-  },
-  {
-    id: 'app-delivery-captain',
-    name: 'تطبيق كابتن التوصيل السريع (موتوسيكل سباق الديب)',
-    nameEn: 'Superbike Racing Courier Driver Companion App',
-    repo: 'mohamedghazawy04-droid/eldeeb-delivery-agent',
-    branch: 'main',
-    category: 'دليفري وشحن',
-    description: 'تطبيق خاص بمناديب التوصيل وكباتن الموتوسيكلات لتأكيد استلام وتوصيل الطلبات للعنوان بالـ GPS.',
-    liveUrl: 'https://driver.eldeeb-pharma.com',
-    githubUrl: 'https://github.com/mohamedghazawy04-droid/eldeeb-delivery-agent',
-    lastCommitMessage: 'feat(gps): Optimize delivery route and customer location pin',
-    lastCommitHash: '9a7d32e',
-    lastCommitTime: 'أمس، 06:45 م',
-    status: 'active',
-    config: {
-      appName: 'كابتن صيدلية الديب',
-      version: '1.8.0',
-      environment: 'production',
-      maintenanceMode: false,
-      whatsappHotline: '01009097378',
-      primaryColor: '#059669',
-      features: {
-        aiPrescriptions: false,
-        realtimeSync: true,
-        pushNotifications: true,
-        vespaDelivery: true,
-      },
-      rawConfigJson: JSON.stringify(
-        {
-          appName: 'Vespa Courier App',
-          version: '1.8.0',
-          autoAssignOrders: true,
-          liveGpsTracking: true,
-          fleetVehicles: ['Vespa Classic', 'Boxer 150', 'Honda Dio'],
-        },
-        null,
-        2
-      ),
-    },
-  },
-  {
-    id: 'app-rx-ai',
-    name: 'بوابة الروشتات والذكاء الاصطناعي',
-    nameEn: 'AI Prescription Vision OCR Engine',
-    repo: 'mohamedghazawy04-droid/rx-ai-scanner',
-    branch: 'production',
-    category: 'ذكاء اصطناعي وطبي',
-    description: 'محرك قراءة الروشتات الطبية المكتوبة بخط اليد بالذكاء الاصطناعي وتجهيز بدائل الأدوية.',
-    liveUrl: 'https://ai-rx.eldeeb-pharma.com',
-    githubUrl: 'https://github.com/mohamedghazawy04-droid/rx-ai-scanner',
-    lastCommitMessage: 'refactor(vision): Improve Egyptian handwritten prescription accuracy to 98.4%',
-    lastCommitHash: '5e8b112',
-    lastCommitTime: 'منذ 3 أيام',
-    status: 'synced',
-    config: {
-      appName: 'محرك الذكاء الاصطناعي للروشتات',
-      version: '2.0.1',
-      environment: 'production',
-      maintenanceMode: false,
-      whatsappHotline: '01009097378',
-      primaryColor: '#d97706',
-      features: {
-        aiPrescriptions: true,
-        realtimeSync: true,
-        pushNotifications: false,
-        vespaDelivery: false,
-      },
-      rawConfigJson: JSON.stringify(
-        {
-          engine: 'gemini-2.5-flash-vision',
-          targetAccuracy: 0.98,
-          extractDrugDosage: true,
-          suggestAlternatives: true,
-        },
-        null,
-        2
-      ),
-    },
-  },
-];
+type AdminModule =
+  | 'products'
+  | 'add-product'
+  | 'excel'
+  | 'cleanup'
+  | 'customers'
+  | 'broadcast'
+  | 'cloud'
+  | 'branding';
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
   products,
@@ -292,11 +101,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   onDeleteProduct,
   onUpdateProduct,
   onClearAllProducts,
+  onRemoveUnavailableProducts,
   onBatchImportProducts,
   onBroadcastNotification,
   onBackToStore,
 }) => {
-  // STRICT AUTHENTICATION - STRICT PASSWORD: MOhager191995 (ABSOLUTELY ZERO HINTS)
+  // STRICT AUTHENTICATION - PASSWORD: MOhager191995
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('eldeeb_hub_auth') === 'true';
   });
@@ -304,461 +114,417 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
 
-  // Active Hub Navigation Tab - Default to 'products' for immediate inventory management
-  const [activeTab, setActiveTab] = useState<'products' | 'customers' | 'broadcast' | 'github' | 'drive' | 'branding'>('products');
+  // Active Icon Navigation Module
+  const [activeModule, setActiveModule] = useState<AdminModule>('products');
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [isEnrichingImages, setIsEnrichingImages] = useState(false);
-  const [imageEnrichSuccess, setImageEnrichSuccess] = useState<string | null>(null);
-  const [isAddFormHighlighted, setIsAddFormHighlighted] = useState(false);
-  const productFormRef = useRef<HTMLDivElement>(null);
-  const [portalLogo, setPortalLogo] = useState<string>(() => getStoredLogo() || '/eldeeb_pharmacy_logo.jpg');
-  const [portalLogoSuccess, setPortalLogoSuccess] = useState(false);
+  const [feedbackToast, setFeedbackToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
-  // GitHub Connected Apps State
-  const [githubApps, setGithubApps] = useState<GitHubAppItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('eldeeb_github_apps_v2');
-      return saved ? JSON.parse(saved) : DEFAULT_GITHUB_APPS;
-    } catch {
-      return DEFAULT_GITHUB_APPS;
-    }
-  });
-
-  const [searchAppTerm, setSearchAppTerm] = useState('');
-  const [isAddRepoOpen, setIsAddRepoOpen] = useState(false);
-
-  // New GitHub Repo Form
-  const [newRepoName, setNewRepoName] = useState('');
-  const [newAppTitle, setNewAppTitle] = useState('');
-  const [newBranch, setNewBranch] = useState('main');
-  const [newCategory, setNewCategory] = useState('تطبيق ويب');
-  const [newAppDesc, setNewAppDesc] = useState('');
-  const [newLiveUrl, setNewLiveUrl] = useState('');
-
-  // Real-Time Live Editor Modal State ("ويمكن التعديل عليها بشكل لحظي")
-  const [editingApp, setEditingApp] = useState<GitHubAppItem | null>(null);
-  const [editorSubTab, setEditorSubTab] = useState<'visual' | 'code'>('visual');
-  const [liveConfigState, setLiveConfigState] = useState<GitHubAppItem['config'] | null>(null);
-  const [isLiveSaving, setIsLiveSaving] = useState(false);
-  const [liveSaveSuccess, setLiveSaveSuccess] = useState(false);
-
-  // Product Catalog Management Form State
+  // Form State
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [nameAr, setNameAr] = useState('');
   const [nameEn, setNameEn] = useState('');
   const [category, setCategory] = useState<ProductCategory>('medicines');
   const [price, setPrice] = useState('');
   const [points, setPoints] = useState('');
-  const [dosageForm, setDosageForm] = useState('');
+  const [dosageForm, setDosageForm] = useState('أقراص');
   const [activeIngredient, setActiveIngredient] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
-  const [stockQuantity, setStockQuantity] = useState('');
+  const [stockQuantity, setStockQuantity] = useState('20');
   const [isLowStock, setIsLowStock] = useState(false);
   const [isComingSoon, setIsComingSoon] = useState(false);
   const [requiresPrescription, setRequiresPrescription] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+
+  // Studio / Camera Modal State
   const [isStudioOpen, setIsStudioOpen] = useState(false);
+
+  // Continuous Live Camera for Pharmacy Manager
+  const [isLiveCameraActive, setIsLiveCameraActive] = useState<boolean>(false);
+  const [liveCameraFacing, setLiveCameraFacing] = useState<'environment' | 'user'>('environment');
+  const [liveCameraError, setLiveCameraError] = useState<string | null>(null);
+  const [selectedAIPreset, setSelectedAIPreset] = useState<StudioPreset>('commercial3d');
+  const [isAIProcessing, setIsAIProcessing] = useState<boolean>(false);
+  const liveVideoRef = useRef<HTMLVideoElement | null>(null);
+  const liveStreamRef = useRef<MediaStream | null>(null);
+
+  // Stop camera tracks on unmount
+  useEffect(() => {
+    return () => {
+      if (liveStreamRef.current) {
+        liveStreamRef.current.getTracks().forEach((track) => track.stop());
+        liveStreamRef.current = null;
+      }
+    };
+  }, []);
+
+  // Search & Filter State
   const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterStock, setFilterStock] = useState<'all' | 'in_stock' | 'out_of_stock' | 'low_stock'>('all');
 
   // Push Broadcast Notification Form
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastMsg, setBroadcastMsg] = useState('');
-  const [broadcastSuccess, setBroadcastSuccess] = useState(false);
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
 
-  // Secret Link Copied State
-  const [copiedLink, setCopiedLink] = useState(false);
+  // Pharmacy Branding
+  const [portalLogo, setPortalLogo] = useState<string>(() => getStoredLogo() || '/eldeeb_pharmacy_logo.jpg');
+  const [isSavingLogo, setIsSavingLogo] = useState(false);
 
-  // Ezaby Catalog Import State
-  const [isImportingEzaby, setIsImportingEzaby] = useState(false);
-  const [ezabyImportFeedback, setEzabyImportFeedback] = useState<string | null>(null);
+  // Confirmation dialogs
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isConfirmingClearAll, setIsConfirmingClearAll] = useState(false);
+  const [isConfirmingRemoveUnavailable, setIsConfirmingRemoveUnavailable] = useState(false);
+  const [isActionInProgress, setIsActionInProgress] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
 
-  // Safe Changes Verification State & Pulse Action
-  const [showSafetyModal, setShowSafetyModal] = useState(false);
-  const [isVerifyingAll, setIsVerifyingAll] = useState(false);
-  const [verifyAllDone, setVerifyAllDone] = useState(false);
+  // Customers data
+  const [customersList, setCustomersList] = useState<Customer[]>(() => getStoredAllCustomers());
 
-  const handleVerifyAllChanges = async () => {
-    setIsVerifyingAll(true);
-    setVerifyAllDone(false);
-    await new Promise((resolve) => setTimeout(resolve, 750));
-    setIsVerifyingAll(false);
-    setVerifyAllDone(true);
-    try {
-      confetti({
-        particleCount: 70,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#10b981', '#06b6d4', '#3b82f6', '#f59e0b'],
-      });
-    } catch {
-      // ignore
-    }
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setFeedbackToast({ type, message });
+    setTimeout(() => setFeedbackToast(null), 4500);
   };
 
-  // Customers & Orders state for preview
-  const [customersList, setCustomersList] = useState<Customer[]>(getStoredAllCustomers);
-
-  // Live Firestore subscription for Customers and Logo in Admin Portal
   useEffect(() => {
-    fetchCustomersFromFirestore().then((cloudCustomers) => {
-      if (cloudCustomers && cloudCustomers.length > 0) {
-        setCustomersList(cloudCustomers);
-      }
-    });
-
-    const unsubCustomers = subscribeToFirestoreCustomers((cloudCustomers) => {
-      if (cloudCustomers && cloudCustomers.length > 0) {
-        setCustomersList(cloudCustomers);
-      }
-    });
-
+    if (!isAuthenticated) return;
     const unsubLogo = subscribeToFirestoreLogo((cloudLogo) => {
-      if (cloudLogo) {
-        setPortalLogo(cloudLogo);
-      }
+      if (cloudLogo) setPortalLogo(cloudLogo);
     });
-
-    const handleLocalCustChange = () => {
-      setCustomersList(getStoredAllCustomers());
-    };
-    window.addEventListener('eldeeb_customers_updated', handleLocalCustChange);
-
+    const unsubCust = subscribeToFirestoreCustomers((cloudCustomers) => {
+      if (cloudCustomers && cloudCustomers.length > 0) setCustomersList(cloudCustomers);
+    });
+    fetchCustomersFromFirestore().then((cloudCust) => {
+      if (cloudCust && cloudCust.length > 0) setCustomersList(cloudCust);
+    });
     return () => {
-      unsubCustomers();
       unsubLogo();
-      window.removeEventListener('eldeeb_customers_updated', handleLocalCustChange);
+      unsubCust();
     };
-  }, []);
+  }, [isAuthenticated]);
 
-  // Save GitHub Apps
-  const saveGithubApps = (apps: GitHubAppItem[]) => {
-    setGithubApps(apps);
-    try {
-      localStorage.setItem('eldeeb_github_apps_v2', JSON.stringify(apps));
-    } catch (e) {
-      console.warn('Could not save GitHub apps to localStorage', e);
-    }
-  };
-
-  // Login handler strictly against MOhager191995 with ZERO hints!
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const MASTER_PASSWORD = 'MOhager191995';
-
-    if (pin.trim() === MASTER_PASSWORD) {
-      setIsAuthenticated(true);
+    if (pin.trim() === 'MOhager191995') {
       sessionStorage.setItem('eldeeb_hub_auth', 'true');
+      setIsAuthenticated(true);
       setAuthError('');
-      setPin('');
+      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
     } else {
-      // Strictly no hints given!
-      setAuthError('رمز الدخول غير صحيح.');
+      setAuthError('كلمة المرور غير صحيحة، يرجى المحاولة مرة أخرى.');
     }
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
     sessionStorage.removeItem('eldeeb_hub_auth');
+    setIsAuthenticated(false);
+    setPin('');
   };
 
-  // Open Real-Time Live Editor for an app
-  const handleOpenLiveEditor = (app: GitHubAppItem) => {
-    setEditingApp(app);
-    setLiveConfigState(JSON.parse(JSON.stringify(app.config)));
-    setEditorSubTab('visual');
-    setLiveSaveSuccess(false);
-  };
-
-  // Save & Apply Live Real-Time Changes ("التعديل اللحظي")
-  const handleApplyLiveConfig = () => {
-    if (!editingApp || !liveConfigState) return;
-    setIsLiveSaving(true);
-
-    setTimeout(() => {
-      const updatedHash = Math.random().toString(16).substring(2, 9);
-      const updatedApps = githubApps.map((a) => {
-        if (a.id === editingApp.id) {
-          return {
-            ...a,
-            config: liveConfigState,
-            lastCommitHash: updatedHash,
-            lastCommitMessage: `chore(config): Live runtime sync updated via Hub for ${liveConfigState.appName}`,
-            lastCommitTime: 'الآن (مباشر)',
-            status: 'active' as const,
-          };
-        }
-        return a;
-      });
-
-      saveGithubApps(updatedApps);
-      setIsLiveSaving(false);
-      setLiveSaveSuccess(true);
-      setTimeout(() => setLiveSaveSuccess(false), 3500);
-    }, 600);
-  };
-
-  // Add new GitHub Repository App
-  const handleCreateGitHubApp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRepoName.trim() || !newAppTitle.trim()) {
-      alert('يرجى ملء اسم المستودع واسم التطبيق');
-      return;
-    }
-
-    let repoFormatted = newRepoName.trim();
-    if (repoFormatted.startsWith('https://github.com/')) {
-      repoFormatted = repoFormatted.replace('https://github.com/', '');
-    }
-
-    const newApp: GitHubAppItem = {
-      id: 'app-' + Date.now(),
-      name: newAppTitle.trim(),
-      nameEn: repoFormatted.split('/')[1] || repoFormatted,
-      repo: repoFormatted,
-      branch: newBranch.trim() || 'main',
-      category: newCategory.trim() || 'برنامج خاص',
-      description: newAppDesc.trim() || `مستودع جيت هاب ${repoFormatted} مربوط بالمنظومة المركزية`,
-      liveUrl: newLiveUrl.trim() || `https://github.com/${repoFormatted}`,
-      githubUrl: `https://github.com/${repoFormatted}`,
-      lastCommitMessage: 'initial sync with Central Hub',
-      lastCommitHash: '1a2b3c4',
-      lastCommitTime: 'الآن',
-      status: 'active',
-      config: {
-        appName: newAppTitle.trim(),
-        version: '1.0.0',
-        environment: 'production',
-        maintenanceMode: false,
-        whatsappHotline: '01009097378',
-        primaryColor: '#0284c7',
-        features: {
-          aiPrescriptions: false,
-          realtimeSync: true,
-          pushNotifications: true,
-          vespaDelivery: false,
-        },
-        rawConfigJson: JSON.stringify(
-          {
-            appName: newAppTitle.trim(),
-            repo: repoFormatted,
-            branch: newBranch.trim() || 'main',
-            status: 'live',
-          },
-          null,
-          2
-        ),
-      },
-    };
-
-    const updated = [newApp, ...githubApps];
-    saveGithubApps(updated);
-    setNewRepoName('');
-    setNewAppTitle('');
-    setNewAppDesc('');
-    setNewLiveUrl('');
-    setIsAddRepoOpen(false);
-    alert(`تم ربط مستودع "${newApp.name}" من GitHub بنجاح!`);
-  };
-
-  const handleDeleteGitHubApp = (appId: string) => {
-    if (window.confirm('هل تريد إلغاء ربط هذا المستودع من المنظومة؟')) {
-      const updated = githubApps.filter((a) => a.id !== appId);
-      saveGithubApps(updated);
-    }
-  };
-
-  // Product Save / Edit Handler
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nameAr.trim() || !price) {
-      alert('يرجى ملء اسم الصنف والسعر');
-      return;
-    }
-
-    const defaultImg =
-      image ||
-      'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=500&auto=format&fit=crop&q=80';
-    const parsedPrice = parseFloat(price) || 0;
-    const calculatedPoints = points ? parseFloat(points) : Math.max(0.1, Number((parsedPrice / 100).toFixed(1)));
-    const qtyNumber = parseInt(stockQuantity, 10);
-
-    if (editingProductId) {
-      const existing = products.find((p) => p.id === editingProductId);
-      const updated: Product = {
-        id: editingProductId,
-        nameAr: nameAr.trim(),
-        nameEn: nameEn.trim() || nameAr.trim(),
-        category,
-        price: parsedPrice,
-        dosageForm: dosageForm.trim() || existing?.dosageForm || 'أقراص',
-        activeIngredient: activeIngredient.trim() || existing?.activeIngredient || 'غير محدد',
-        description: description.trim() || existing?.description || 'منتج طبي معتمد من صيدلية الديب.',
-        usage: existing?.usage || 'وفق إرشادات الصيدلي.',
-        requiresPrescription,
-        inStock: !isComingSoon && (isNaN(qtyNumber) || qtyNumber > 0),
-        points: calculatedPoints,
-        image: defaultImg,
-        isNew: existing?.isNew,
-        stockQuantity: isNaN(qtyNumber) ? undefined : qtyNumber,
-        isLowStock: isLowStock || (!isNaN(qtyNumber) && qtyNumber > 0 && qtyNumber <= 5),
-        isComingSoon,
-      };
-
-      const result = await onUpdateProduct(updated);
-      if (result && !result.success) {
-        alert(`تعذر حفظ الصورة أو المنتج: ${result.error || 'تحقق من تسجيل دخول المدير'}`);
-        return;
-      }
-      syncAddProductToFirestore(updated);
-      resetProductForm();
-      alert(`تم حفظ تعديل ${updated.nameAr} بنجاح!`);
-    } else {
-      const newProd: Product = {
-        id: 'prod-' + Date.now(),
-        nameAr: nameAr.trim(),
-        nameEn: nameEn.trim() || nameAr.trim(),
-        category,
-        price: parsedPrice,
-        dosageForm: dosageForm.trim() || 'أقراص',
-        activeIngredient: activeIngredient.trim() || 'غير محدد',
-        description: description.trim() || 'منتج طبي معتمد من صيدلية الديب.',
-        usage: 'وفق استشارة الصيدلي.',
-        requiresPrescription,
-        inStock: !isComingSoon && (isNaN(qtyNumber) || qtyNumber > 0),
-        points: calculatedPoints,
-        image: defaultImg,
-        isNew: true,
-        createdAt: Date.now(),
-        stockQuantity: isNaN(qtyNumber) ? undefined : qtyNumber,
-        isLowStock: isLowStock || (!isNaN(qtyNumber) && qtyNumber > 0 && qtyNumber <= 5),
-        isComingSoon,
-      };
-
-      const result = await onAddProduct(newProd);
-      if (result && !result.success) {
-        alert(`تعذر رفع الصورة أو حفظ المنتج: ${result.error || 'تحقق من تسجيل دخول المدير'}`);
-        return;
-      }
-      syncAddProductToFirestore(newProd);
-      resetProductForm();
-      alert(`تمت إضافة ${newProd.nameAr} بنجاح للكتالوج!`);
-    }
-  };
-
-  const resetProductForm = () => {
+  // Reset form
+  const resetForm = () => {
     setEditingProductId(null);
     setNameAr('');
     setNameEn('');
+    setCategory('medicines');
     setPrice('');
     setPoints('');
-    setDosageForm('');
+    setDosageForm('أقراص');
     setActiveIngredient('');
     setDescription('');
     setImage('');
-    setStockQuantity('');
+    setStockQuantity('20');
     setIsLowStock(false);
     setIsComingSoon(false);
     setRequiresPrescription(false);
   };
 
-  const handleEditClick = (p: Product) => {
-    setEditingProductId(p.id);
-    setNameAr(p.nameAr);
-    setNameEn(p.nameEn || '');
-    setCategory(p.category);
-    setPrice(String(p.price));
-    setPoints(String(p.points));
-    setDosageForm(p.dosageForm || '');
-    setActiveIngredient(p.activeIngredient || '');
-    setDescription(p.description || '');
-    setImage(p.image);
-    setStockQuantity(p.stockQuantity !== undefined ? String(p.stockQuantity) : '');
-    setIsLowStock(!!p.isLowStock);
-    setIsComingSoon(!!p.isComingSoon);
-    setRequiresPrescription(!!p.requiresPrescription);
-    setActiveTab('products');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleStartEdit = (product: Product) => {
+    setEditingProductId(product.id);
+    setNameAr(product.nameAr);
+    setNameEn(product.nameEn || '');
+    setCategory(product.category);
+    setPrice(product.price.toString());
+    setPoints(product.points?.toString() || (product.price * 10).toString());
+    setDosageForm(product.dosageForm || 'أقراص');
+    setActiveIngredient(product.activeIngredient || '');
+    setDescription(product.description || '');
+    setImage(product.image);
+    setStockQuantity(product.stockQuantity !== undefined ? product.stockQuantity.toString() : '20');
+    setIsLowStock(product.isLowStock || false);
+    setIsComingSoon(product.isComingSoon || false);
+    setRequiresPrescription(product.requiresPrescription || false);
+    setActiveModule('add-product');
   };
 
-  const handleRemoveDemoProducts = () => {
-    const demoIds = ['1', '2', '3', '4', '5', '6', '7', '8'];
-    const demoProds = products.filter((p) => demoIds.includes(p.id) || p.id.startsWith('demo-'));
-    if (demoProds.length === 0) {
-      alert('لا توجد أصناف تجريبية في الكتالوج حالياً.');
+  // Start Continuous Live Camera for Manager
+  const startLiveCamera = async (mode: 'environment' | 'user' = liveCameraFacing) => {
+    if (liveStreamRef.current) {
+      liveStreamRef.current.getTracks().forEach((track) => track.stop());
+      liveStreamRef.current = null;
+    }
+    setLiveCameraError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setLiveCameraError('الكاميرا تحتاج إلى إذن المتصفح ورابط آمن HTTPS.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: mode,
+          width: { ideal: 1280 },
+          height: { ideal: 960 },
+        },
+        audio: false,
+      });
+      liveStreamRef.current = stream;
+      if (liveVideoRef.current) {
+        liveVideoRef.current.srcObject = stream;
+        await liveVideoRef.current.play();
+      }
+      setIsLiveCameraActive(true);
+      showToast('تم تفعيل الكاميرا المباشرة بنجاح - وجه الكاميرا نحو عبوة الدواء', 'info');
+    } catch (err: any) {
+      console.error('Camera access error:', err);
+      const name = err?.name === 'NotAllowedError' ? 'تم رفض إذن الكاميرا من المتصفح.' : 'تعذر تشغيل الكاميرا.';
+      setLiveCameraError(`${name} يرجى السماح بالإذن أو رفع صورة العبوة من جهازك.`);
+      setIsLiveCameraActive(false);
+    }
+  };
+
+  // Stop Live Camera
+  const stopLiveCamera = () => {
+    if (liveStreamRef.current) {
+      liveStreamRef.current.getTracks().forEach((track) => track.stop());
+      liveStreamRef.current = null;
+    }
+    setIsLiveCameraActive(false);
+  };
+
+  // Toggle Camera Front / Back
+  const toggleLiveCameraFacing = () => {
+    const next = liveCameraFacing === 'environment' ? 'user' : 'environment';
+    setLiveCameraFacing(next);
+    startLiveCamera(next);
+  };
+
+  // Capture Live Frame and immediately apply AI Studio enhancement
+  const captureLiveCameraSnapshot = async () => {
+    if (!liveVideoRef.current) return;
+    try {
+      setIsAIProcessing(true);
+      const video = liveVideoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 800;
+      canvas.height = video.videoHeight || 600;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const rawDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+      // AI studio enhancement: commercial studio lighting, drop shadow, and authenticity stamp
+      const enhanced = await enhanceMedicinePhotoWithAI(rawDataUrl, selectedAIPreset, true);
+      setImage(enhanced);
+      setIsAIProcessing(false);
+      showToast('✨ تم التقاط العبوة وتطبيق معالجة الذكاء الاصطناعي بنجاح!', 'success');
+    } catch {
+      setIsAIProcessing(false);
+      showToast('تعذر معالجة الصورة بالذكاء الاصطناعي', 'error');
+    }
+  };
+
+  // Apply chosen AI Preset on existing image
+  const handleApplyPresetToCurrentImage = async (preset: StudioPreset) => {
+    if (!image) {
+      showToast('يرجى التقاط أو رفع صورة الصنف أولاً لتطبيق النمط', 'info');
+      return;
+    }
+    try {
+      setIsAIProcessing(true);
+      setSelectedAIPreset(preset);
+      const enhanced = await enhanceMedicinePhotoWithAI(image, preset, true);
+      setImage(enhanced);
+      setIsAIProcessing(false);
+      showToast('تم تطبيق نمط الاستوديو بنجاح', 'success');
+    } catch {
+      setIsAIProcessing(false);
+      showToast('حدث خطأ في تطبيق النمط', 'error');
+    }
+  };
+
+  // Image Upload handler with instant AI studio enhancement
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsAIProcessing(true);
+      const optimized = await optimizeProductImage(file, 800, 800, 0.85);
+      const enhanced = await enhanceMedicinePhotoWithAI(optimized.dataUrl, selectedAIPreset, true);
+      setImage(enhanced);
+      setIsAIProcessing(false);
+      showToast('تم تحميل ومعالجة صورة الصنف بالذكاء الاصطناعي بنجاح', 'success');
+    } catch {
+      setIsAIProcessing(false);
+      showToast('فشل قراءة ومعالجة ملف الصورة', 'error');
+    }
+  };
+
+  // Save product (Add or Update)
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nameAr.trim()) {
+      showToast('يرجى كتابة اسم الصنف بالعربية', 'error');
+      return;
+    }
+    const numericPrice = parseFloat(price);
+    if (isNaN(numericPrice) || numericPrice < 0) {
+      showToast('يرجى إدخال سعر صحيح', 'error');
       return;
     }
 
-    if (window.confirm(`هل تريد إزالة ${demoProds.length} أصناف تجريبية والاحتفاظ فقط بأصنافك الحقيقية؟`)) {
-      demoProds.forEach((d) => {
-        onDeleteProduct(d.id);
-        syncDeleteProductFromFirestore(d.id);
-      });
-      alert('تم حذف جميع الأصناف التجريبية بنجاح!');
-    }
-  };
+    setIsSavingProduct(true);
+    const finalImage = image.trim() || resolveProductImage({ nameAr, nameEn, category, dosageForm, activeIngredient });
+    const numericStock = parseInt(stockQuantity, 10);
+    const validStock = isNaN(numericStock) ? 20 : numericStock;
+    const finalPoints = points.trim() ? parseFloat(points) : recalculateProductLoyaltyPoints(numericPrice);
 
-  const handleImportEzabyCatalog = async () => {
-    setIsImportingEzaby(true);
-    setEzabyImportFeedback(null);
+    const productData: Product = {
+      id: editingProductId || `prod_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      nameAr: nameAr.trim(),
+      nameEn: nameEn.trim() || nameAr.trim(),
+      category,
+      price: numericPrice,
+      points: finalPoints,
+      dosageForm: dosageForm.trim() || 'أقراص',
+      activeIngredient: activeIngredient.trim() || 'وفق التركيبة المعتمدة',
+      description: description.trim() || 'منتج طبي معتمد في صيدلية الديب.',
+      image: finalImage,
+      inStock: validStock > 0,
+      stockQuantity: validStock,
+      isLowStock: validStock > 0 && validStock <= 5,
+      isComingSoon,
+      requiresPrescription,
+      usage: 'وفق إرشادات الطبيب أو الصيدلي.',
+      isNew: true,
+      createdAt: Date.now(),
+    };
+
     try {
-      if (onBatchImportProducts) {
-        await onBatchImportProducts(EZABY_TOP_PRODUCTS);
+      if (editingProductId) {
+        await onUpdateProduct(productData);
+        showToast(`تم بنجاح تعديل الصنف "${productData.nameAr}" ومزامنته سحابياً`);
       } else {
-        for (const p of EZABY_TOP_PRODUCTS) {
-          onAddProduct(p);
-          syncAddProductToFirestore(p);
-        }
+        await onAddProduct(productData);
+        showToast(`تم بنجاح إضافة الصنف "${productData.nameAr}" وحفظه سحابياً`);
       }
-      setEzabyImportFeedback(`✅ تم بنجاح استيراد وحفظ ${EZABY_TOP_PRODUCTS.length} صنفاً من كتالوج العزبي الأكثر طلباً بالصيدلية! يمكنك التعديل أو الحذف في أي وقت.`);
-      setTimeout(() => setEzabyImportFeedback(null), 8000);
+      resetForm();
+      setActiveModule('products');
     } catch (err: any) {
-      console.error('Import catalog failed:', err);
-      setEzabyImportFeedback(`تم استيراد الكتالوج وحفظه محلياً بنجاح (${EZABY_TOP_PRODUCTS.length} صنفاً).`);
-      setTimeout(() => setEzabyImportFeedback(null), 6000);
+      showToast(err?.message || 'حدث خطأ أثناء حفظ الصنف', 'error');
     } finally {
-      setIsImportingEzaby(false);
+      setIsSavingProduct(false);
     }
   };
 
-  // Scroll to manual product add form
-  const handleScrollToAddProduct = () => {
-    setActiveTab('products');
-    resetProductForm();
-    setIsAddFormHighlighted(true);
-    setTimeout(() => {
-      productFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 120);
-    setTimeout(() => {
-      setIsAddFormHighlighted(false);
-    }, 3000);
+  // Delete single product
+  const handleExecuteDelete = async (id: string) => {
+    setIsActionInProgress(true);
+    try {
+      await onDeleteProduct(id);
+      showToast('تم حذف الصنف ومزامنته سحابياً بنجاح (Supabase & Firestore)');
+    } catch {
+      showToast('فشل حذف الصنف سحابياً', 'error');
+    } finally {
+      setConfirmDeleteId(null);
+      setIsActionInProgress(false);
+    }
   };
 
-  // Handle Complete Excel / CSV Bulk Import
-  const handleExcelImportComplete = async (importedList: Product[], mode: 'merge' | 'replace') => {
-    if (mode === 'replace' && onClearAllProducts) {
-      onClearAllProducts();
-      syncClearAllFirestoreProducts();
-    }
-
-    if (onBatchImportProducts) {
-      await onBatchImportProducts(importedList);
-    } else {
-      for (const p of importedList) {
-        await onAddProduct(p);
+  // Bulk remove unavailable products
+  const handleExecuteRemoveUnavailable = async () => {
+    setIsActionInProgress(true);
+    try {
+      if (onRemoveUnavailableProducts) {
+        const count = await onRemoveUnavailableProducts();
+        showToast(`تم بنجاح إزالة ومسح ${count} صنف غير متوفر من الكتالوج والسحابة`);
+      } else {
+        const unavailable = products.filter((p) => !p.inStock || p.stockQuantity <= 0 || p.isComingSoon);
+        for (const item of unavailable) {
+          await onDeleteProduct(item.id);
+        }
+        showToast(`تم إزالة ${unavailable.length} صنف غير متوفر بنجاح`);
       }
+    } catch {
+      showToast('حدث خطأ أثناء إزالة الأصناف غير المتوفرة', 'error');
+    } finally {
+      setIsConfirmingRemoveUnavailable(false);
+      setIsActionInProgress(false);
     }
-
-    setActiveTab('products');
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.6 },
-    });
   };
 
-  // Instant bulk automatic image enrichment for catalog products
+  // Total wipe catalog
+  const handleExecuteClearAll = async () => {
+    setIsActionInProgress(true);
+    try {
+      if (onClearAllProducts) {
+        await onClearAllProducts();
+      }
+      setSelectedProductIds([]);
+      showToast('تم مسح كافة الأصناف وتصفير الكتالوج سحابياً ومحلياً بنجاح! الموقع فارغ وجاهز لإضافة ما تريده.');
+      setActiveModule('products');
+    } catch {
+      showToast('حدث خطأ أثناء مسح الأصناف', 'error');
+    } finally {
+      setIsConfirmingClearAll(false);
+      setIsActionInProgress(false);
+    }
+  };
+
+  // Toggle single product stock directly
+  const handleToggleStock = async (product: Product) => {
+    const nextInStock = !product.inStock || (product.stockQuantity !== undefined && product.stockQuantity <= 0);
+    const updated: Product = {
+      ...product,
+      inStock: nextInStock,
+      stockQuantity: nextInStock ? (product.stockQuantity && product.stockQuantity > 0 ? product.stockQuantity : 20) : 0,
+      isLowStock: false,
+    };
+    try {
+      await onUpdateProduct(updated);
+      showToast(nextInStock ? `أصبح "${product.nameAr}" متوفراً بالصيدلية` : `تم تعيين "${product.nameAr}" كغير متوفر`);
+    } catch {
+      showToast('فشل تحديث حالة الصنف سحابياً', 'error');
+    }
+  };
+
+  // Bulk delete selected products
+  const handleBulkDeleteSelected = async () => {
+    if (selectedProductIds.length === 0) return;
+    if (!window.confirm(`هل أنت متأكد من حذف ${selectedProductIds.length} صنفاً نهائياً من الصيدلية والسحابة؟`)) return;
+    setIsActionInProgress(true);
+    const countToDelete = selectedProductIds.length;
+    try {
+      for (const id of selectedProductIds) {
+        await onDeleteProduct(id);
+      }
+      setSelectedProductIds([]);
+      showToast(`تم بنجاح حذف ${countToDelete} صنف ومزامنتها سحابياً`);
+    } catch {
+      showToast('حدث خطأ أثناء حذف الأصناف المحددة', 'error');
+    } finally {
+      setIsActionInProgress(false);
+    }
+  };
+
+  // Bulk Enrich Images
   const handleAutoEnrichImages = async () => {
+    if (products.length === 0) {
+      showToast('الكتالوج فارغ حالياً، يرجى إضافة أصناف أولاً', 'info');
+      return;
+    }
     setIsEnrichingImages(true);
     try {
       const { updatedCount, enrichedProducts } = enrichProductsWithImages(products);
@@ -766,1503 +532,1474 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         if (onBatchImportProducts) {
           await onBatchImportProducts(enrichedProducts);
         }
-        setImageEnrichSuccess(`تم بنجاح تحديث وتوليد صور دوائية وطبية حقيقية لـ ${updatedCount} صنف في الكتالوج!`);
-        confetti({
-          particleCount: 70,
-          spread: 60,
-          origin: { y: 0.6 },
-        });
+        showToast(`تم بنجاح تحديث وتوليد صور دوائية وطبية حقيقية لـ ${updatedCount} صنف وحفظها سحابياً!`);
+        confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
       } else {
-        setImageEnrichSuccess('جميع الأصناف في الكتالوج تحتوي بالفعل على صور حقيقية ومحدثة!');
+        showToast('جميع الأصناف في الكتالوج تحتوي بالفعل على صور حقيقية ومحدثة!', 'info');
       }
-      setTimeout(() => setImageEnrichSuccess(null), 6000);
-    } catch (e) {
-      console.error(e);
-      setImageEnrichSuccess('حدث خطأ أثناء فحص الصور');
-      setTimeout(() => setImageEnrichSuccess(null), 4000);
+    } catch {
+      showToast('حدث خطأ أثناء فحص الصور', 'error');
     } finally {
       setIsEnrichingImages(false);
     }
   };
 
-  // Broadcast push notification
-  const handleSendBroadcast = (e: React.FormEvent) => {
+  // Send broadcast
+  const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastTitle.trim() || !broadcastMsg.trim()) {
-      alert('يرجى كتابة العنوان والرسالة');
+      showToast('يرجى ملء عنوان ونص الإشعار', 'error');
       return;
     }
-    onBroadcastNotification(broadcastTitle.trim(), broadcastMsg.trim());
-    syncBroadcastNotificationToFirestore(broadcastTitle.trim(), broadcastMsg.trim());
-    setBroadcastTitle('');
-    setBroadcastMsg('');
-    setBroadcastSuccess(true);
-    setTimeout(() => setBroadcastSuccess(false), 4000);
+    setIsSendingBroadcast(true);
+    try {
+      await onBroadcastNotification(broadcastTitle.trim(), broadcastMsg.trim());
+      showToast('تم بنجاح إرسال وبث الإشعار العام لجميع الزبائن!');
+      setBroadcastTitle('');
+      setBroadcastMsg('');
+    } catch {
+      showToast('تعذر إرسال الإشعار', 'error');
+    } finally {
+      setIsSendingBroadcast(false);
+    }
   };
 
-  // Copy private direct link
-  const handleCopySecretLink = () => {
-    const secretUrl = window.location.origin + window.location.pathname + '#hub';
-    navigator.clipboard.writeText(secretUrl);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 3000);
+  // Save pharmacy logo
+  const handleSaveLogo = async () => {
+    setIsSavingLogo(true);
+    try {
+      saveStoredLogo(portalLogo);
+      await syncSaveLogoToFirestore(portalLogo);
+      showToast('تم بنجاح حفظ وتحديث شعار وهوية الصيدلية سحابياً!');
+    } catch {
+      showToast('حدث خطأ أثناء حفظ الشعار', 'error');
+    } finally {
+      setIsSavingLogo(false);
+    }
   };
 
-  const filteredApps = githubApps.filter(
-    (a) =>
-      a.name.toLowerCase().includes(searchAppTerm.toLowerCase()) ||
-      a.repo.toLowerCase().includes(searchAppTerm.toLowerCase()) ||
-      a.category.toLowerCase().includes(searchAppTerm.toLowerCase())
-  );
-
-  const [adminDisplayLimit, setAdminDisplayLimit] = useState(100);
-
+  // Filter products
   const filteredProducts = useMemo(() => {
-    const term = productSearchTerm.trim().toLowerCase();
-    if (!term) return products;
-    return products.filter(
-      (p) =>
-        p.nameAr.toLowerCase().includes(term) ||
-        p.nameEn.toLowerCase().includes(term) ||
-        (p.activeIngredient && p.activeIngredient.toLowerCase().includes(term))
-    );
-  }, [products, productSearchTerm]);
+    return products.filter((prod) => {
+      const matchesSearch =
+        !productSearchTerm.trim() ||
+        prod.nameAr.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+        (prod.nameEn && prod.nameEn.toLowerCase().includes(productSearchTerm.toLowerCase())) ||
+        (prod.activeIngredient && prod.activeIngredient.toLowerCase().includes(productSearchTerm.toLowerCase())) ||
+        (prod.dosageForm && prod.dosageForm.toLowerCase().includes(productSearchTerm.toLowerCase()));
 
-  useEffect(() => {
-    setAdminDisplayLimit(100);
-  }, [productSearchTerm]);
+      const matchesCategory = filterCategory === 'all' || prod.category === filterCategory;
 
-  const visibleProducts = useMemo(
-    () => filteredProducts.slice(0, adminDisplayLimit),
-    [filteredProducts, adminDisplayLimit]
-  );
+      let matchesStock = true;
+      if (filterStock === 'in_stock') matchesStock = prod.inStock && prod.stockQuantity > 0;
+      if (filterStock === 'out_of_stock') matchesStock = !prod.inStock || prod.stockQuantity <= 0;
+      if (filterStock === 'low_stock') matchesStock = prod.inStock && prod.stockQuantity > 0 && prod.stockQuantity <= 5;
+
+      return matchesSearch && matchesCategory && matchesStock;
+    });
+  }, [products, productSearchTerm, filterCategory, filterStock]);
+
+  const unavailableCount = useMemo(() => {
+    return products.filter((p) => !p.inStock || p.stockQuantity <= 0 || p.isComingSoon).length;
+  }, [products]);
+
+  // Download Catalog JSON backup
+  const handleExportJsonBackup = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(products, null, 2));
+    const dlAnchorElem = document.createElement('a');
+    dlAnchorElem.setAttribute('href', dataStr);
+    dlAnchorElem.setAttribute('download', `eldeeb_pharmacy_catalog_backup_${new Date().toISOString().slice(0, 10)}.json`);
+    dlAnchorElem.click();
+    showToast('تم تصدير نسخة احتياطية من الكتالوج بنجاح (JSON)');
+  };
+
+  // ICON DASHBOARD TILES DEFINITION
+  const dashboardIcons = [
+    {
+      id: 'products' as AdminModule,
+      title: 'كتالوج ومخزون الأدوية',
+      description: 'البحث، التعديل والحذف الفوري',
+      badge: `${products.length} صنف`,
+      badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+      icon: Package,
+      gradient: 'from-cyan-500/20 to-blue-500/10 border-cyan-500/30 text-cyan-400',
+      activeRing: 'ring-2 ring-cyan-500 border-cyan-400',
+    },
+    {
+      id: 'add-product' as AdminModule,
+      title: 'إضافة صنف دوائي',
+      description: 'إدراج دواء وتوليد صورته ذكياً',
+      badge: editingProductId ? 'وضع التعديل' : 'إضافة فورية',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      icon: Plus,
+      gradient: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/30 text-emerald-400',
+      activeRing: 'ring-2 ring-emerald-500 border-emerald-400',
+    },
+    {
+      id: 'excel' as AdminModule,
+      title: 'استيراد كشف Excel / CSV',
+      description: 'رفع دفعات ضخمة حتى 25,000 صنف',
+      badge: 'إكسيل و CSV',
+      badgeColor: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+      icon: FileSpreadsheet,
+      gradient: 'from-teal-500/20 to-emerald-500/10 border-teal-500/30 text-teal-400',
+      activeRing: 'ring-2 ring-teal-500 border-teal-400',
+    },
+    {
+      id: 'cleanup' as AdminModule,
+      title: 'تنظيف وتصفية المخزون',
+      description: 'إزالة النواقص أو مسح الكتالوج للبدء',
+      badge: unavailableCount > 0 ? `${unavailableCount} غير متوفر` : 'المخزون مضبوط',
+      badgeColor: unavailableCount > 0 ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-slate-700 text-slate-300 border-slate-600',
+      icon: SlidersHorizontal,
+      gradient: 'from-amber-500/20 to-rose-500/10 border-amber-500/30 text-amber-400',
+      activeRing: 'ring-2 ring-amber-500 border-amber-400',
+    },
+    {
+      id: 'customers' as AdminModule,
+      title: 'سجل العملاء والولاء',
+      description: 'بيانات الزبائن ورصيد نقاط المكافآت',
+      badge: `${customersList.length} عميل`,
+      badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+      icon: Users,
+      gradient: 'from-purple-500/20 to-indigo-500/10 border-purple-500/30 text-purple-400',
+      activeRing: 'ring-2 ring-purple-500 border-purple-400',
+    },
+    {
+      id: 'broadcast' as AdminModule,
+      title: 'إرسال إشعار وبث عروض',
+      description: 'إرسال تنبيه مباشر لشاشات العملاء',
+      badge: 'بث عام',
+      badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
+      icon: Bell,
+      gradient: 'from-sky-500/20 to-blue-500/10 border-sky-500/30 text-sky-400',
+      activeRing: 'ring-2 ring-sky-500 border-sky-400',
+    },
+    {
+      id: 'cloud' as AdminModule,
+      title: 'السحابة والنسخ الاحتياطي',
+      description: 'حالة Supabase و Firestore والتصدير',
+      badge: 'متصل 🟢',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      icon: Database,
+      gradient: 'from-blue-500/20 to-indigo-500/10 border-blue-500/30 text-blue-400',
+      activeRing: 'ring-2 ring-blue-500 border-blue-400',
+    },
+    {
+      id: 'branding' as AdminModule,
+      title: 'هوية وشعار الصيدلية',
+      description: 'تخصيص اللوجو واسم المنظومة',
+      badge: 'الهوية',
+      badgeColor: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
+      icon: Store,
+      gradient: 'from-pink-500/20 to-rose-500/10 border-pink-500/30 text-pink-400',
+      activeRing: 'ring-2 ring-pink-500 border-pink-400',
+    },
+  ];
 
   return (
-    <div
-      id="standalone-admin-hub-portal"
-      className="min-h-screen bg-slate-950 text-slate-100 font-cairo flex flex-col antialiased selection:bg-cyan-500 selection:text-white text-right"
-      dir="rtl"
-    >
-      {/* Top Header Bar */}
-      <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-30 px-4 sm:px-6 py-3 flex items-center justify-between shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-cyan-500/20">
-            <Layers className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-extrabold text-sm sm:text-base text-white tracking-wide">
-                المنظومة المركزية ومركز تطبيقات GitHub
-              </h1>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/80 font-bold">
-                Private Hub
-              </span>
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-cairo" dir="rtl">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {feedbackToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl border text-sm font-bold flex items-center gap-2.5 backdrop-blur-md ${
+              feedbackToast.type === 'error'
+                ? 'bg-rose-950/90 text-rose-200 border-rose-500/50'
+                : feedbackToast.type === 'info'
+                ? 'bg-sky-950/90 text-sky-200 border-sky-500/50'
+                : 'bg-emerald-950/90 text-emerald-200 border-emerald-500/50'
+            }`}
+          >
+            {feedbackToast.type === 'error' ? (
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            ) : feedbackToast.type === 'info' ? (
+              <AlertTriangle className="w-5 h-5 text-sky-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            )}
+            <span>{feedbackToast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Top Header */}
+      <header className="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-30 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <img
+              src={portalLogo}
+              alt="صيدلية الديب"
+              className="w-10 h-10 rounded-2xl object-cover border border-cyan-500/30 shadow-md bg-white p-0.5"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/eldeeb_pharmacy_logo.jpg';
+              }}
+            />
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-base sm:text-lg font-black text-white">لوحة إدارة صيدلية الديب</h1>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30 font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  مزامنة سحابية نشطة
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">تحكم كامل في المخزون، الأسعار، العملاء، وتوليد الصور</p>
             </div>
-            <p className="text-[11px] text-slate-400">
-              إدارة صيدلية الديب ومستودعات جيت هاب والتعديل اللحظي المباشر
-            </p>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={onBackToStore}
-            className="p-2 bg-rose-950/70 hover:bg-rose-800 text-rose-200 rounded-xl border border-rose-700/70 transition-colors"
-            title="إغلاق لوحة المدير والعودة للمتجر"
-            aria-label="إغلاق لوحة المدير"
-          >
-            <X className="w-4 h-4" />
-          </button>
-          {/* Cloud Safety Status Button with Gentle Pulse Animation */}
-          <button
-            type="button"
-            onClick={() => setShowSafetyModal(true)}
-            className="relative px-3 sm:px-3.5 py-2 bg-gradient-to-r from-emerald-950/90 via-slate-900 to-emerald-950/70 border border-emerald-500/50 hover:border-emerald-400 text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all hover:shadow-emerald-950/50 group active:scale-95 cursor-pointer"
-            title="فحص وتأكيد أمان جميع التغييرات السابقة"
-          >
-            {/* Gentle Pulse animation ping dot */}
-            <span className="relative flex h-2.5 w-2.5 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
-            <span className="hidden md:inline font-bold">كل التغييرات محفوظة بأمان</span>
-            <span className="inline md:hidden font-bold">محفوظ بأمان</span>
-          </button>
-
-          {/* Secret Link Share Button */}
-          <button
-            type="button"
-            onClick={handleCopySecretLink}
-            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition-colors"
-            title="نسخ الرابط السري المباشر للبوابة"
-          >
-            {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span className="hidden md:inline">{copiedLink ? 'تم نسخ الرابط السري!' : 'نسخ رابط البوابة'}</span>
-          </button>
-
-          {/* Switch back to customer store */}
-          <button
-            type="button"
-            onClick={onBackToStore}
-            className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 text-white rounded-xl text-xs font-bold shadow flex items-center gap-1.5 transition-transform active:scale-95"
-            title="الانتقال لمتجر العملاء"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">معاينة متجر العملاء</span>
-          </button>
-
-          {isAuthenticated && (
+          <div className="flex items-center gap-2">
             <button
-              type="button"
-              onClick={handleLogout}
-              className="p-2 sm:px-3 sm:py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 rounded-xl font-bold text-xs border border-rose-800/60 flex items-center gap-1.5 transition-colors"
-              title="تسجيل الخروج"
+              onClick={onBackToStore}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition-colors"
             >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">خروج</span>
+              <ShoppingBag className="w-4 h-4 text-cyan-400" />
+              <span className="hidden sm:inline">العودة للمتجر</span>
             </button>
-          )}
+            {isAuthenticated && (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-2 bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-rose-800/40 transition-colors"
+                title="تسجيل الخروج"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">خروج</span>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      {!isAuthenticated ? (
-        /* Isolated Login Gate - ZERO HINTS - STRICT PASSWORD: MOhager191995 */
-        <div className="flex-1 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.94 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-2xl text-center space-y-5"
-          >
-            <div className="w-16 h-16 rounded-3xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto shadow-inner">
-              <ShieldCheck className="w-8 h-8" />
-            </div>
-
-            <div>
-              <h2 className="text-lg font-bold text-white mb-1">المنظومة المركزية</h2>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                يرجى إدخال رمز الدخول السري للوصول لمركز التطبيقات وإدارة المستودعات.
-              </p>
-            </div>
-
-            {authError && (
-              <div className="p-3 bg-rose-950/60 border border-rose-800/60 text-rose-300 text-xs rounded-xl flex items-center justify-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{authError}</span>
-              </div>
-            )}
-
-            {/* Form with AUTOCOMPLETE STRICTLY DISABLED TO PREVENT BROWSER SUGGESTIONS */}
-            <form
-              onSubmit={handleLogin}
-              autoComplete="off"
-              className="space-y-4 text-right"
-              data-form-type="other"
+      {/* Main Content */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        {!isAuthenticated ? (
+          /* Password Authentication Gate */
+          <div className="flex-1 flex items-center justify-center py-16 px-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6 text-center"
             >
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  رمز الدخول السري
-                </label>
-                <div className="relative">
-                  <input
-                    id="admin-portal-secure-pin"
-                    type={showPassword ? 'text' : 'password'}
-                    name="admin_secret_key_field"
-                    autoComplete="new-password"
-                    data-lpignore="true"
-                    data-form-type="other"
-                    spellCheck={false}
-                    autoCorrect="off"
-                    autoCapitalize="none"
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full pr-4 pl-11 py-3 bg-slate-800 text-white rounded-2xl text-center text-lg tracking-widest font-mono outline-none border border-slate-700 focus:border-cyan-500 transition-colors shadow-inner"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute left-3.5 top-3.5 text-slate-400 hover:text-slate-200"
-                    title={showPassword ? 'إخفاء الرمز' : 'إظهار الرمز'}
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-cyan-500/20 transition-all active:scale-98"
-              >
-                تأكيد الدخول للمنظومة
-              </button>
-            </form>
-          </motion.div>
-        </div>
-      ) : (
-        /* Authenticated Dashboard & Pharmacy Management Hub */
-        <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
-          {/* Top Quick Actions Bar for Medicine & Stock Management */}
-          <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-slate-700/80 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 shadow-inner">
-                <Package className="w-6 h-6" />
+              <div className="w-16 h-16 rounded-3xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto shadow-inner">
+                <Lock className="w-8 h-8" />
               </div>
               <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base sm:text-lg font-black text-white">إدارة مخزون وأصناف صيدلية الديب</h2>
-                  <span className="text-xs bg-cyan-500/20 text-cyan-300 font-bold px-2.5 py-0.5 rounded-full border border-cyan-500/30">
-                    {products.length.toLocaleString('ar-EG')} صنف مسجل
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  أضف صنفاً يدوياً أو استورد كشف أدوية الصيدلية بالكامل (Excel/CSV حتى 25,000+ صنف) بدفعة واحدة.
+                <h2 className="text-xl font-black text-white mb-1.5">تسجيل الدخول للإدارة</h2>
+                <p className="text-xs text-slate-400">
+                  لوحة إدارة صيدلية الديب محمية برمز أمان خاص بالمسؤول فقط
                 </p>
               </div>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-              <button
-                type="button"
-                onClick={handleScrollToAddProduct}
-                className="flex-1 sm:flex-initial px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs sm:text-sm font-black shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-2 transition-all active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ إضافة صنف دوائي جديد</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsExcelModalOpen(true)}
-                className="flex-1 sm:flex-initial px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-black shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all active:scale-95"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
-                <span>استيراد كشف Excel / CSV (حتى 25 ألف صنف)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleAutoEnrichImages}
-                disabled={isEnrichingImages}
-                className="flex-1 sm:flex-initial px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs sm:text-sm font-black shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-60"
-                title="تحديث وتوليد صور صيدلية حقيقية للأصناف التي تفتقر لصور مخصصة"
-              >
-                <Sparkles className={`w-4 h-4 text-purple-200 ${isEnrichingImages ? 'animate-spin' : ''}`} />
-                <span>{isEnrichingImages ? 'جاري الفحص والتحديث...' : '⚡ تحديث وتوليد صور الكتالوج فورياً'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Image Enrichment Banner */}
-          {imageEnrichSuccess && (
-            <div className="p-3 bg-gradient-to-r from-emerald-950/80 to-teal-950/80 border border-emerald-500/40 text-emerald-300 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>{imageEnrichSuccess}</span>
-            </div>
-          )}
-
-          {/* Main Navigation Tabs */}
-          <div className="flex border-b border-slate-800 bg-slate-900/60 p-1.5 rounded-2xl gap-2 overflow-x-auto scrollbar-none shadow-sm">
-            <button
-              onClick={() => setActiveTab('products')}
-              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                activeTab === 'products'
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Package className="w-4 h-4" />
-              <span>كتالوج ومخزون الأدوية ({products.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('customers')}
-              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                activeTab === 'customers'
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              <span>العملاء ونقاط الولاء ({customersList.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('broadcast')}
-              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                activeTab === 'broadcast'
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Bell className="w-4 h-4" />
-              <span>إرسال إشعار عام للعملاء</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('github')}
-              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                activeTab === 'github'
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Code2 className="w-4 h-4" />
-              <span>مركز تطبيقات GitHub والتعديل اللحظي ({githubApps.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('drive')}
-              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                activeTab === 'drive'
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <HardDrive className="w-4 h-4" />
-              <span>Google Drive والنسخ السحابي</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('branding')}
-              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                activeTab === 'branding'
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <ImageIcon className="w-4 h-4" />
-              <span>هوية وشعار الصيدلية (Branding)</span>
-            </button>
-          </div>
-
-          {/* ================= TAB 1: GITHUB CONNECTED APPS & REAL-TIME LIVE EDITOR ================= */}
-          {activeTab === 'github' && (
-            <div className="space-y-6">
-              {/* Permanent Cloud Backup to GitHub */}
-              <GitHubBackupManager
-                products={products}
-                onProductsRestored={(restored) => onBatchImportProducts?.(restored)}
-              />
-
-              {/* Top Banner with Stats & Controls */}
-              <div className="p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 border border-slate-800 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                    <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                      <span>تطبيقاتك ومستودعاتك المرتبطة بـ GitHub</span>
-                    </h2>
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    يمكنك تعديل إعدادات وملفات البرامج لحظياً، ومزامنتها سحابياً، وفتح المستودعات أو المعاينة بضغطة زر.
-                  </p>
+              {authError && (
+                <div className="p-3 bg-rose-950/60 border border-rose-800/60 text-rose-300 text-xs rounded-xl flex items-center justify-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{authError}</span>
                 </div>
-
-                <div className="flex items-center gap-2.5 w-full md:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddRepoOpen(true)}
-                    className="px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 text-white rounded-xl font-bold text-xs shadow-lg flex items-center gap-2 transition-transform active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>ربط مستودع GitHub جديد</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Search Bar for Apps */}
-              <div className="flex items-center justify-between gap-3">
-                <input
-                  type="text"
-                  value={searchAppTerm}
-                  onChange={(e) => setSearchAppTerm(e.target.value)}
-                  placeholder="بحث في التطبيقات والمستودعات..."
-                  className="w-full sm:w-80 px-4 py-2.5 bg-slate-900 text-white rounded-2xl text-xs border border-slate-800 focus:border-cyan-500 outline-none transition-colors"
-                />
-                <span className="text-xs text-slate-400">
-                  إجمالي البرامج: <span className="font-mono text-cyan-400 font-bold">{githubApps.length}</span>
-                </span>
-              </div>
-
-              {/* Add New Repo Modal / Panel */}
-              {isAddRepoOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-slate-900 border border-cyan-500/40 rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl"
-                >
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <h3 className="text-sm font-bold text-cyan-300 flex items-center gap-2">
-                      <Code2 className="w-4 h-4" />
-                      <span>ربط تطبيق أو مستودع جديد من GitHub</span>
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddRepoOpen(false)}
-                      className="text-xs text-slate-400 hover:text-white"
-                    >
-                      إلغاء
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleCreateGitHubApp} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">
-                          اسم المستودع على GitHub (user/repo) *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={newRepoName}
-                          onChange={(e) => setNewRepoName(e.target.value)}
-                          placeholder="mohamedghazawy04-droid/my-new-app"
-                          className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">
-                          اسم التطبيق أو المنظومة *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={newAppTitle}
-                          onChange={(e) => setNewAppTitle(e.target.value)}
-                          placeholder="مثال: تطبيق فرع صيدلية الديب 2"
-                          className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">
-                          الفرع الافتراضي (Branch)
-                        </label>
-                        <input
-                          type="text"
-                          value={newBranch}
-                          onChange={(e) => setNewBranch(e.target.value)}
-                          placeholder="main"
-                          className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">
-                          التصنيف
-                        </label>
-                        <input
-                          type="text"
-                          value={newCategory}
-                          onChange={(e) => setNewCategory(e.target.value)}
-                          placeholder="حسابات / مخازن / تطبيق عملاء"
-                          className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">
-                          رابط المعاينة الحي (Live URL)
-                        </label>
-                        <input
-                          type="text"
-                          value={newLiveUrl}
-                          onChange={(e) => setNewLiveUrl(e.target.value)}
-                          placeholder="https://app.example.com"
-                          className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
-                        وصف التطبيق ووظيفته
-                      </label>
-                      <input
-                        type="text"
-                        value={newAppDesc}
-                        onChange={(e) => setNewAppDesc(e.target.value)}
-                        placeholder="نبذة عن وظيفة هذا النظام في صيدلية الديب"
-                        className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 text-white rounded-xl font-bold text-xs shadow-md transition-all"
-                    >
-                      حفظ وربط المستودع بالمنظومة
-                    </button>
-                  </form>
-                </motion.div>
               )}
 
-              {/* Connected GitHub Apps Cards Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {filteredApps.map((app) => (
-                  <div
-                    key={app.id}
-                    className="bg-slate-900 border border-slate-800 hover:border-cyan-500/50 rounded-3xl p-5 sm:p-6 transition-all space-y-4 shadow-lg group relative overflow-hidden"
-                  >
-                    {/* Top card header */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="bg-cyan-950/80 text-cyan-300 border border-cyan-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
-                            {app.category}
-                          </span>
-                          <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded-full font-bold">
-                            <GitBranch className="w-3 h-3" />
-                            <span>{app.branch}</span>
-                          </span>
-                        </div>
-                        <h3 className="font-extrabold text-base text-white">{app.name}</h3>
-                        <div className="text-xs text-slate-400 font-mono flex items-center gap-1 mt-0.5">
-                          <Code2 className="w-3.5 h-3.5 text-cyan-400" />
-                          <span>{app.repo}</span>
-                        </div>
-                      </div>
+              <form onSubmit={handleLogin} autoComplete="off" className="space-y-4 text-right">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    رمز الدخول السري
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      value={pin}
+                      onChange={(e) => setPin(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pr-4 pl-11 py-3 bg-slate-800 text-white rounded-2xl text-center text-lg tracking-widest font-mono outline-none border border-slate-700 focus:border-cyan-500 transition-colors shadow-inner"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute left-3.5 top-3.5 text-slate-400 hover:text-slate-200"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
 
-                      <div className="flex items-center gap-1.5">
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-cyan-500/20 transition-all active:scale-98"
+                >
+                  تأكيد الدخول
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        ) : (
+          /* Authenticated Dashboard */
+          <>
+            {/* 1. ICON DASHBOARD GRID - ليس جرار وإنما شبكة أيقونات منظمة */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-bold text-slate-400">أقسام ولوحات الإدارة المباشرة (اختر قسماً):</span>
+                <span className="text-[11px] text-cyan-400 font-bold">
+                  {dashboardIcons.find((d) => d.id === activeModule)?.title}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
+                {dashboardIcons.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeModule === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        if (item.id === 'excel') {
+                          setIsExcelModalOpen(true);
+                        } else {
+                          setActiveModule(item.id);
+                        }
+                      }}
+                      className={`relative p-3 rounded-2xl border transition-all duration-200 flex flex-col items-center text-center group cursor-pointer ${
+                        isActive
+                          ? `bg-slate-900 shadow-xl ${item.activeRing}`
+                          : 'bg-slate-900/60 hover:bg-slate-850 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center mb-2 border transition-transform group-hover:scale-105 ${
+                          isActive ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300' : item.gradient
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <span className="text-xs font-black text-white leading-tight mb-1 line-clamp-1">
+                        {item.title}
+                      </span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${item.badgeColor}`}>
+                        {item.badge}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. MODULE: PRODUCTS CATALOG (كتالوج ومخزون الأدوية) */}
+            {activeModule === 'products' && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Search & Actions Bar */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl space-y-4">
+                  <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                    {/* Search box */}
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+                      <input
+                        type="text"
+                        value={productSearchTerm}
+                        onChange={(e) => setProductSearchTerm(e.target.value)}
+                        placeholder="ابحث باسم الدواء، المادة الفعالة، الشكل الدوائي..."
+                        className="w-full pr-10 pl-4 py-2.5 bg-slate-800 text-white rounded-2xl text-xs sm:text-sm border border-slate-700 focus:border-cyan-500 outline-none"
+                      />
+                      {productSearchTerm && (
+                        <button
+                          onClick={() => setProductSearchTerm('')}
+                          className="absolute left-3 top-3 text-slate-400 hover:text-white"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Category */}
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={filterCategory}
+                        onChange={(e) => setFilterCategory(e.target.value)}
+                        className="px-3 py-2.5 bg-slate-800 text-white rounded-2xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
+                      >
+                        <option value="all">كل الأقسام الطبية</option>
+                        {CATEGORIES.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.nameAr}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Filter Stock */}
+                      <select
+                        value={filterStock}
+                        onChange={(e) => setFilterStock(e.target.value as any)}
+                        className="px-3 py-2.5 bg-slate-800 text-white rounded-2xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
+                      >
+                        <option value="all">كل الحالات</option>
+                        <option value="in_stock">متوفر فقط</option>
+                        <option value="out_of_stock">غير متوفر (Out of stock)</option>
+                        <option value="low_stock">أوشك على النفاد</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Quick Action Buttons */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => {
+                          resetForm();
+                          setActiveModule('add-product');
+                        }}
+                        className="px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 text-white rounded-xl text-xs font-bold shadow flex items-center gap-1.5 transition-transform active:scale-95"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>+ إضافة صنف جديد</span>
+                      </button>
+
+                      <button
+                        onClick={() => setIsExcelModalOpen(true)}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition-colors"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                        <span>استيراد كشف Excel / CSV</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsConfirmingClearAll(true)}
+                        disabled={products.length === 0 || isActionInProgress}
+                        className="px-3.5 py-2 bg-rose-950/70 hover:bg-rose-900/80 text-rose-300 rounded-xl text-xs font-bold border border-rose-800/50 flex items-center gap-1.5 transition-colors disabled:opacity-40"
+                        title="مسح وتصفير كافة الأصناف للبدء بكتالوج نظيف وفارغ"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-400" />
+                        <span>مسح كافة الأصناف ({products.length}) ⚠️</span>
+                      </button>
+
+                      <button
+                        onClick={handleAutoEnrichImages}
+                        disabled={isEnrichingImages || products.length === 0}
+                        className="px-3.5 py-2 bg-purple-950/60 hover:bg-purple-900/60 text-purple-300 rounded-xl text-xs font-bold border border-purple-800/40 flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                        title="فحص الكتالوج وتوليد صور حقيقية للأصناف التي تفتقر لصورة"
+                      >
+                        <Sparkles className={`w-4 h-4 text-purple-400 ${isEnrichingImages ? 'animate-spin' : ''}`} />
+                        <span>{isEnrichingImages ? 'جاري التوليد...' : '⚡ توليد صور الأصناف تلقائياً'}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">
+                        المعروض: <span className="text-white font-mono font-bold">{filteredProducts.length}</span> من أصل{' '}
+                        <span className="text-cyan-400 font-mono font-bold">{products.length}</span> صنف
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Bulk Selection Bar */}
+                  {selectedProductIds.length > 0 && (
+                    <div className="bg-cyan-950/90 border border-cyan-800/80 rounded-2xl p-3 px-4 flex flex-wrap items-center justify-between gap-3 text-xs shadow-lg animate-in fade-in">
+                      <div className="flex items-center gap-2 text-cyan-200 font-bold">
+                        <Check className="w-4 h-4 text-cyan-400" />
+                        <span>تم تحديد: {selectedProductIds.length} صنف</span>
+                      </div>
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => handleDeleteGitHubApp(app.id)}
-                          className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="إلغاء الربط"
+                          onClick={handleBulkDeleteSelected}
+                          disabled={isActionInProgress}
+                          className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition-all active:scale-95"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>حذف الأصناف المحددة نهائياً ({selectedProductIds.length})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProductIds([])}
+                          className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-xl text-xs hover:bg-slate-700"
+                        >
+                          إلغاء التحديد
                         </button>
                       </div>
                     </div>
+                  )}
+                </div>
 
-                    <p className="text-xs text-slate-300 leading-relaxed">{app.description}</p>
-
-                    {/* Commit & Health Status */}
-                    <div className="p-3 bg-slate-950/80 border border-slate-800/80 rounded-2xl text-[11px] space-y-1 font-mono">
-                      <div className="flex items-center justify-between text-slate-400">
-                        <div className="flex items-center gap-1 text-slate-300 truncate">
-                          <GitCommit className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                          <span className="truncate">{app.lastCommitMessage}</span>
-                        </div>
-                        <span className="text-[10px] text-cyan-400 shrink-0 font-bold">#{app.lastCommitHash}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] text-slate-500">
-                        <span>آخر تحديث: {app.lastCommitTime}</span>
-                        <span className="text-emerald-400 font-bold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          متصل بالمنظومة
-                        </span>
-                      </div>
+                {/* Products Table / Empty State */}
+                {products.length === 0 ? (
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center space-y-4">
+                    <div className="w-16 h-16 rounded-full bg-cyan-500/10 text-cyan-400 flex items-center justify-center mx-auto">
+                      <Package className="w-8 h-8" />
                     </div>
-
-                    {/* Action Buttons: Live Real-Time Edit & Launch */}
-                    <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-lg font-black text-white">كتالوج الصيدلية فارغ تماماً</h3>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                      تم تصفير الأصناف بنجاح. يمكنك الآن البدء بإضافة الأدوية بانتقائية صنفاً صنفاً، أو استيراد كشف إكسيل للأصناف التي تختارها.
+                    </p>
+                    <div className="flex justify-center gap-3 pt-2">
                       <button
-                        type="button"
-                        onClick={() => handleOpenLiveEditor(app)}
-                        className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95"
+                        onClick={() => {
+                          resetForm();
+                          setActiveModule('add-product');
+                        }}
+                        className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg"
                       >
-                        <Sliders className="w-3.5 h-3.5" />
-                        <span>تعديل لحظي للمشروع (Live Edit)</span>
+                        + إضافة أول صنف دوائي
                       </button>
-
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={app.githubUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs flex items-center gap-1 transition-colors border border-slate-700"
-                          title="فتح المستودع على GitHub"
-                        >
-                          <Code2 className="w-3.5 h-3.5" />
-                          <span className="text-[11px] font-mono">GitHub</span>
-                        </a>
-
-                        <a
-                          href={app.liveUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-2 bg-slate-800 hover:bg-cyan-900/60 text-cyan-300 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-colors border border-slate-700"
-                          title="معاينة التطبيق الحي"
-                        >
-                          <span>معاينة التطبيق</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
+                      <button
+                        onClick={() => setIsExcelModalOpen(true)}
+                        className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-700"
+                      >
+                        استيراد كشف Excel
+                      </button>
                     </div>
                   </div>
-                ))}
+                ) : filteredProducts.length === 0 ? (
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center text-slate-400 text-xs">
+                    لا توجد أصناف مطابقة لبحثك "{productSearchTerm}"
+                  </div>
+                ) : (
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-right text-xs">
+                        <thead className="bg-slate-850 text-slate-400 font-bold border-b border-slate-800">
+                          <tr>
+                            <th className="py-3 px-3 text-center w-10">
+                              <input
+                                type="checkbox"
+                                checked={filteredProducts.length > 0 && selectedProductIds.length === filteredProducts.length}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedProductIds(filteredProducts.map((p) => p.id));
+                                  } else {
+                                    setSelectedProductIds([]);
+                                  }
+                                }}
+                                className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-cyan-600 cursor-pointer"
+                                title="تحديد جميع الأصناف"
+                              />
+                            </th>
+                            <th className="py-3 px-4">الصورة</th>
+                            <th className="py-3 px-4">اسم الدواء / الصنف</th>
+                            <th className="py-3 px-4">القسم الطبي</th>
+                            <th className="py-3 px-4">الشكل والتركيبة</th>
+                            <th className="py-3 px-4">السعر</th>
+                            <th className="py-3 px-4">المخزون والحالة (انقر للتبديل)</th>
+                            <th className="py-3 px-4 text-center">الإجراءات</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 text-slate-200">
+                          {filteredProducts.map((p) => (
+                            <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2.5 px-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedProductIds.includes(p.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedProductIds((prev) => [...prev, p.id]);
+                                    } else {
+                                      setSelectedProductIds((prev) => prev.filter((id) => id !== p.id));
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-cyan-600 cursor-pointer"
+                                />
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center shrink-0">
+                                  <img
+                                    src={p.image}
+                                    alt={p.nameAr}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = '/eldeeb_pharmacy_logo.jpg';
+                                    }}
+                                  />
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-4 font-bold">
+                                <div className="text-white text-sm">{p.nameAr}</div>
+                                {p.nameEn && <div className="text-[11px] text-slate-400 font-mono">{p.nameEn}</div>}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300 text-[11px]">
+                                  {CATEGORIES.find((c) => c.id === p.category)?.nameAr || p.category}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <div className="text-slate-300">{p.dosageForm || 'أقراص'}</div>
+                                <div className="text-[10px] text-slate-500 truncate max-w-[140px]">
+                                  {p.activeIngredient || 'وفق التركيبة'}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-4 font-bold font-mono">
+                                <span className="text-emerald-400 text-sm">{p.price} ج.م</span>
+                                <div className="text-[10px] text-cyan-400 font-normal">
+                                  {p.points !== undefined ? p.points : recalculateProductLoyaltyPoints(p.price)} نقطة
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleStock(p)}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all border shadow-sm ${
+                                    !p.inStock || (p.stockQuantity !== undefined && p.stockQuantity <= 0)
+                                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-emerald-500/20 hover:text-emerald-300 hover:border-emerald-500/40'
+                                      : p.stockQuantity && p.stockQuantity <= 5
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40'
+                                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40'
+                                  }`}
+                                  title="اضغط هنا للتبديل الفوري بين متوفر وغير متوفر"
+                                >
+                                  {!p.inStock || (p.stockQuantity !== undefined && p.stockQuantity <= 0) ? (
+                                    <>
+                                      <span>غير متوفر ✕</span>
+                                      <span className="text-[9px] underline opacity-75">(انقر للتوفر)</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span>متوفر ({p.stockQuantity || 20}) ✓</span>
+                                      <span className="text-[9px] underline opacity-75">(انقر للإيقاف)</span>
+                                    </>
+                                  )}
+                                </button>
+                              </td>
+                              <td className="py-2.5 px-4 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEdit(p)}
+                                    className="px-2.5 py-1 bg-cyan-950/80 hover:bg-cyan-700 text-cyan-300 hover:text-white border border-cyan-800/60 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold"
+                                    title="تعديل كافة بيانات الصنف، السعر، والكمية، والصورة"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                    <span>تعديل</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteId(p.id)}
+                                    className="px-2.5 py-1 bg-rose-950/80 hover:bg-rose-700 text-rose-300 hover:text-white border border-rose-800/60 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold"
+                                    title="حذف الصنف من الدليل ومزامنته سحابياً"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>حذف</span>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ================= TAB 2: PHARMACY PRODUCTS & STOCK MANAGEMENT ================= */}
-          {activeTab === 'products' && (
-            <div className="space-y-6">
-              {/* Products Header */}
-              <div className="p-5 bg-slate-900 border border-slate-800 rounded-3xl flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                    <Package className="w-5 h-5 text-cyan-400" />
-                    <span>إدارة كتالوج الأدوية والمخزون</span>
-                    <span className="text-xs bg-slate-800 text-cyan-300 px-2.5 py-0.5 rounded-full border border-slate-700">
-                      {products.length.toLocaleString('ar-EG')} صنف
-                    </span>
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-1">
-                    أضف أو عدّل الأصناف، ارفع كشف أدوية كامل (Excel/CSV حتى 25,000 صنف)، وحدد الأسعار ونقاط الولاء.
-                  </p>
-                </div>
+            {/* 3. MODULE: ADD / EDIT PRODUCT (إضافة أو تعديل صنف مع توليد الصورة) */}
+            {activeModule === 'add-product' && (
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-6 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                      <Plus className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-black text-white">
+                        {editingProductId ? `✏️ تعديل بيانات وصورة الصنف: "${nameAr}"` : 'إضافة صنف دوائي جديد للكتالوج'}
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        {editingProductId
+                          ? 'يمكنك تعديل الأسعار، الكميات، وتوليد أو تحديث الصورة فورياً مع الحفظ السحابي التلقائي'
+                          : 'أدخل تفاصيل الدواء واستخدم التوليد التلقائي لتعيين صورة صيدلية فائقة الجودة'}
+                      </p>
+                    </div>
+                  </div>
 
-                <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
-                  <button
-                    type="button"
-                    onClick={handleScrollToAddProduct}
-                    className="px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>+ إضافة صنف يدوياً</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsExcelModalOpen(true)}
-                    className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95"
-                    title="استيراد ملف إكسل أو كشف أدوية حتى 25,000 صنف"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
-                    <span>استيراد كشف Excel / CSV (حتى 25 ألف صنف)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleImportEzabyCatalog}
-                    disabled={isImportingEzaby}
-                    className={`px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs border border-slate-700 flex items-center gap-1.5 transition-all ${
-                      isImportingEzaby ? 'opacity-70 cursor-wait' : ''
-                    }`}
-                    title="تحميل باقة أصناف العزبي الأكثر طلباً ومبيعاً في الصيدليات المصرية"
-                  >
-                    {isImportingEzaby ? (
-                      <RefreshCw className="w-3.5 h-3.5 text-amber-300 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    )}
-                    <span>
-                      {isImportingEzaby
-                        ? 'جارٍ الاستيراد والحفظ...'
-                        : `استيراد كتالوج العزبي (${EZABY_TOP_PRODUCTS.length})`}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleRemoveDemoProducts}
-                    className="px-3 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 rounded-xl font-bold text-xs border border-rose-800/60 flex items-center gap-1.5 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>حذف الأصناف التجريبية</span>
-                  </button>
-                </div>
-              </div>
-
-              {ezabyImportFeedback && (
-                <div className="p-4 bg-emerald-950/70 border border-emerald-500/50 rounded-2xl text-emerald-200 text-xs sm:text-sm font-semibold flex items-center gap-2.5 animate-fadeIn shadow-lg shadow-emerald-950/30">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span>{ezabyImportFeedback}</span>
-                </div>
-              )}
-
-              {/* Product Form */}
-              <div
-                ref={productFormRef}
-                id="admin-add-product-form"
-                className={`bg-slate-900 border rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl transition-all duration-500 ${
-                  isAddFormHighlighted
-                    ? 'border-cyan-400 ring-4 ring-cyan-500/30 scale-[1.005]'
-                    : 'border-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    {editingProductId ? <Edit3 className="w-4 h-4 text-amber-400" /> : <Plus className="w-4 h-4 text-cyan-400" />}
-                    <span>{editingProductId ? 'تعديل بيانات الدواء المحدد' : 'إضافة صنف دوائي جديد للكتالوج'}</span>
-                  </h3>
                   {editingProductId && (
                     <button
                       type="button"
-                      onClick={resetProductForm}
-                      className="text-xs text-slate-400 hover:text-white"
+                      onClick={() => {
+                        resetForm();
+                        setActiveModule('products');
+                      }}
+                      className="px-3.5 py-1.5 bg-slate-800 text-slate-200 hover:text-white rounded-xl text-xs font-bold hover:bg-slate-700 border border-slate-700"
                     >
-                      إلغاء التعديل
+                      إلغاء التعديل ✕
                     </button>
                   )}
                 </div>
 
-                <form onSubmit={handleSaveProduct} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {editingProductId && (
+                  <div className="bg-cyan-950/70 border border-cyan-800/70 rounded-2xl p-3 px-4 flex items-center justify-between text-xs text-cyan-200 animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                      <Edit3 className="w-4 h-4 text-cyan-400 shrink-0" />
+                      <span>أنت الآن في وضع تعديل بيانات الصنف: <strong className="text-white font-bold">{nameAr}</strong>. اضغط على "حفظ التعديلات سحابياً" بالأسفل بعد الانتهاء.</span>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleSaveProduct} className="space-y-6">
+                  {/* Basic Info */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
-                        اسم الدواء بالعربية *
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        اسم الدواء بالعربية <span className="text-rose-400">*</span>
                       </label>
                       <input
                         type="text"
                         required
                         value={nameAr}
                         onChange={(e) => setNameAr(e.target.value)}
-                        placeholder="مثال: بنادول إكسترا 500 مجم"
-                        className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
+                        placeholder="مثال: بنادول أدفانس، كونجستال"
+                        className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
-                        الاسم الإنجليزي (اختياري)
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        اسم الدواء بالإنجليزية
                       </label>
                       <input
                         type="text"
                         value={nameEn}
                         onChange={(e) => setNameEn(e.target.value)}
-                        placeholder="Panadol Extra 500mg"
-                        className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
+                        placeholder="مثال: Panadol Advance 500mg"
+                        className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
                       />
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">القسم</label>
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        القسم الطبي <span className="text-rose-400">*</span>
+                      </label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value as ProductCategory)}
-                        className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
+                        className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
                       >
-                        {CATEGORIES.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.nameAr}
+                        {CATEGORIES.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.nameAr}
                           </option>
                         ))}
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
-                        السعر بالجنيه (ج.م) *
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        الشكل الدوائي
                       </label>
                       <input
-                        type="number"
-                        required
-                        min="1"
-                        value={price}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setPrice(val);
-                          const num = parseFloat(val);
-                          if (!isNaN(num) && num > 0) {
-                            setPoints(String(Math.round(num * 10)));
-                          }
-                        }}
-                        placeholder="50"
-                        className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
+                        type="text"
+                        value={dosageForm}
+                        onChange={(e) => setDosageForm(e.target.value)}
+                        placeholder="أقراص، كبسولات، شراب، أمبولات، مرهم..."
+                        className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
-                        نقاط الولاء (10 نقاط/جنيه)
-                      </label>
-                      <input
-                        type="number"
-                        value={points}
-                        onChange={(e) => setPoints(e.target.value)}
-                        placeholder="500"
-                        className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
                         المادة الفعالة
                       </label>
                       <input
                         type="text"
                         value={activeIngredient}
                         onChange={(e) => setActiveIngredient(e.target.value)}
-                        placeholder="باراسيتامول + كافيين"
-                        className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
+                        placeholder="مثال: Paracetamol 500mg"
+                        className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
-                        الشكل الصيدلي
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        السعر للجمهور (ج.م) <span className="text-rose-400">*</span>
                       </label>
                       <input
-                        type="text"
-                        value={dosageForm}
-                        onChange={(e) => setDosageForm(e.target.value)}
-                        placeholder="أقراص / شراب / أمبولات"
-                        className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
+                        type="number"
+                        step="0.5"
+                        required
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        placeholder="مثال: 35"
+                        className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        الكمية في المخزون
+                      </label>
+                      <input
+                        type="number"
+                        value={stockQuantity}
+                        onChange={(e) => setStockQuantity(e.target.value)}
+                        placeholder="20"
+                        className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        نقاط الولاء المكتسبة
+                      </label>
+                      <input
+                        type="number"
+                        value={points}
+                        onChange={(e) => setPoints(e.target.value)}
+                        placeholder="اتركه فارغاً للحساب التلقائي (10 نقاط/جنيه)"
+                        className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-4 pt-5">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={requiresPrescription}
+                          onChange={(e) => setRequiresPrescription(e.target.checked)}
+                          className="w-4 h-4 text-cyan-600 rounded bg-slate-800 border-slate-700"
+                        />
+                        <span>يتطلب روشتة طبية 📋</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={isComingSoon}
+                          onChange={(e) => setIsComingSoon(e.target.checked)}
+                          className="w-4 h-4 text-amber-600 rounded bg-slate-800 border-slate-700"
+                        />
+                        <span>قريباً بالصيدلية ⏳</span>
+                      </label>
                     </div>
                   </div>
 
-                  {/* Gemini AI Camera Studio */}
-                  <div className="p-4 bg-slate-800/60 rounded-2xl border border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      {image ? (
-                        <img
-                          src={image}
-                          alt="معاينة"
-                          className="w-16 h-16 rounded-xl object-cover border border-cyan-500 shadow-md"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 rounded-xl bg-slate-700 flex items-center justify-center text-slate-400 text-xs">
-                          لا توجد صورة
-                        </div>
-                      )}
+                  {/* CONTINUOUS CAMERA & AI PRODUCT STUDIO */}
+                  <div className="p-4 sm:p-5 bg-slate-850 border border-slate-750 rounded-3xl space-y-4 shadow-xl">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                       <div>
-                        <h4 className="text-xs font-bold text-white">صورة عبوة الدواء</h4>
-                        <p className="text-[11px] text-slate-400">
-                          التقط بكاميرا جيميناي لتوليد صورة واضحة ومفرغة، أو الصق رابطاً
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                            <Camera className="w-4 h-4 text-cyan-400" />
+                            <span>كاميرا التقاط العبوة واستوديو المعالجة الذكي (AI Studio)</span>
+                          </h4>
+                          <span className="bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full">
+                            مباشر ومستمر
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">
+                          التقط صورة العبوة الحقيقية بالكاميرا المباشرة المستمرة أو ارفعها لتتحول فورياً لبوستر دعائي ثلاثي الأبعاد وإضاءة صيدلية نقية
                         </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isLiveCameraActive) {
+                              stopLiveCamera();
+                            } else {
+                              startLiveCamera();
+                            }
+                          }}
+                          className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
+                            isLiveCameraActive
+                              ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20'
+                              : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 text-white shadow-cyan-600/20'
+                          }`}
+                        >
+                          {isLiveCameraActive ? (
+                            <>
+                              <VideoOff className="w-4 h-4" />
+                              <span>إيقاف الكاميرا</span>
+                            </>
+                          ) : (
+                            <>
+                              <Video className="w-4 h-4" />
+                              <span>تشغيل الكاميرا المباشرة</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsStudioOpen(true)}
+                          className="flex-1 sm:flex-initial px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl text-xs font-bold border border-slate-700 flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <Wand2 className="w-4 h-4 text-purple-400" />
+                          <span>استوديو التعديل المتقدم</span>
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    {/* LIVE CAMERA VIEWFINDER (Continuously open for the manager) */}
+                    {isLiveCameraActive && (
+                      <div className="relative w-full aspect-video max-h-[380px] bg-black rounded-2xl overflow-hidden border-2 border-cyan-500/50 shadow-2xl flex items-center justify-center">
+                        <video
+                          ref={liveVideoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className="w-full h-full object-cover"
+                        />
+
+                        {/* Framing guide overlay */}
+                        <div className="absolute inset-6 sm:inset-10 border-2 border-white/50 border-dashed rounded-2xl pointer-events-none flex flex-col items-center justify-between p-3">
+                          <span className="text-[11px] font-bold text-white bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm">
+                            ضع عبوة الدواء داخل الإطار 🎯
+                          </span>
+                          <span className="text-[10px] text-cyan-300 bg-black/60 px-2.5 py-0.5 rounded-full backdrop-blur-sm">
+                            النمط المختار: {selectedAIPreset === 'clinicalWhite' ? 'أبيض صيدلاني ناصع' : selectedAIPreset === 'goldenGlow' ? 'إشراق تسويقي ذهبي' : 'ستوديو ثلاثي الأبعاد 3D'}
+                          </span>
+                        </div>
+
+                        {/* Top camera controls */}
+                        <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-auto">
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-600/90 text-white rounded-full text-[11px] font-black tracking-wider animate-pulse">
+                            <span className="w-2 h-2 rounded-full bg-white"></span>
+                            <span>LIVE</span>
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={toggleLiveCameraFacing}
+                            className="p-2.5 bg-black/60 hover:bg-black/80 text-white rounded-full backdrop-blur-md transition-transform active:scale-90"
+                            title="تبديل الكاميرا (أمامية / خلفية)"
+                          >
+                            <SwitchCamera className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Bottom action controls */}
+                        <div className="absolute bottom-3 inset-x-3 flex flex-col items-center gap-2 pointer-events-auto">
+                          {/* Preset selection chips */}
+                          <div className="flex items-center gap-1.5 bg-black/70 backdrop-blur-md p-1 rounded-full border border-white/10">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAIPreset('commercial3d')}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
+                                selectedAIPreset === 'commercial3d'
+                                  ? 'bg-cyan-500 text-slate-950'
+                                  : 'text-white/80 hover:text-white'
+                              }`}
+                            >
+                              ستوديو 3D
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAIPreset('clinicalWhite')}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
+                                selectedAIPreset === 'clinicalWhite'
+                                  ? 'bg-cyan-500 text-slate-950'
+                                  : 'text-white/80 hover:text-white'
+                              }`}
+                            >
+                              أبيض صيدلاني
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAIPreset('goldenGlow')}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
+                                selectedAIPreset === 'goldenGlow'
+                                  ? 'bg-amber-400 text-slate-950'
+                                  : 'text-white/80 hover:text-white'
+                              }`}
+                            >
+                              إشراق ذهبي
+                            </button>
+                          </div>
+
+                          {/* Snapshot Button */}
+                          <button
+                            type="button"
+                            onClick={captureLiveCameraSnapshot}
+                            disabled={isAIProcessing}
+                            className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 text-slate-950 font-black text-xs sm:text-sm rounded-full shadow-lg shadow-cyan-500/40 flex items-center gap-2 border-2 border-white transition-transform active:scale-95 disabled:opacity-50"
+                          >
+                            {isAIProcessing ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                                <span>جاري المعالجة بالذكاء الاصطناعي...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Camera className="w-4 h-4" />
+                                <span>⚡ التقاط ومعالجة بالذكاء الاصطناعي فوراً</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {liveCameraError && (
+                      <div className="p-3 bg-rose-950/40 border border-rose-800 text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                        <span>{liveCameraError}</span>
+                      </div>
+                    )}
+
+                    {/* Image Preview & Enhancement Tools */}
+                    <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-900/60 p-3.5 rounded-2xl border border-slate-800">
+                      {/* Thumbnail with Authenticity Badge */}
+                      <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden flex items-center justify-center shrink-0 shadow-inner group">
+                        {image ? (
+                          <>
+                            <img
+                              src={image}
+                              alt="معاينة الصنف"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/eldeeb_pharmacy_logo.jpg';
+                              }}
+                            />
+                            {isAIProcessing && (
+                              <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center">
+                                <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center p-2 text-center">
+                            <ImageIcon className="w-6 h-6 text-slate-600 mb-1" />
+                            <span className="text-[10px] text-slate-500">لا توجد صورة</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Image Details & Quick AI Controls */}
+                      <div className="flex-1 w-full space-y-2.5">
+                        {image && (
+                          <div className="space-y-1.5">
+                            <span className="text-[11px] font-bold text-slate-300">
+                              تغيير نمط الإخراج بالذكاء الاصطناعي بنقرة واحدة:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleApplyPresetToCurrentImage('commercial3d')}
+                                disabled={isAIProcessing}
+                                className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition-colors flex items-center gap-1 ${
+                                  selectedAIPreset === 'commercial3d'
+                                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                    : 'bg-slate-800 hover:bg-slate-750 text-slate-300 border-slate-700'
+                                }`}
+                              >
+                                <span>💎 ستوديو 3D وظل واقعي</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplyPresetToCurrentImage('clinicalWhite')}
+                                disabled={isAIProcessing}
+                                className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition-colors flex items-center gap-1 ${
+                                  selectedAIPreset === 'clinicalWhite'
+                                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                    : 'bg-slate-800 hover:bg-slate-750 text-slate-300 border-slate-700'
+                                }`}
+                              >
+                                <span>🏥 أبيض صيدلاني ناصع</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplyPresetToCurrentImage('goldenGlow')}
+                                disabled={isAIProcessing}
+                                className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition-colors flex items-center gap-1 ${
+                                  selectedAIPreset === 'goldenGlow'
+                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                    : 'bg-slate-800 hover:bg-slate-750 text-slate-300 border-slate-700'
+                                }`}
+                              >
+                                <span>✨ إشراق دعائي ذهبي</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                              رفع صورة العبوة من الجهاز (معالجة AI تلقائية):
+                            </label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageFileUpload}
+                              className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-cyan-600 file:text-white hover:file:bg-cyan-500 cursor-pointer"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                              أو رابط الصورة المباشر (URL):
+                            </label>
+                            <input
+                              type="text"
+                              value={image}
+                              onChange={(e) => setImage(e.target.value)}
+                              placeholder="https://... رابط صورة مباشرة"
+                              className="w-full px-3 py-1.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetForm();
+                        setActiveModule('products');
+                      }}
+                      className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+                    >
+                      إلغاء
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={isSavingProduct}
+                      className="px-6 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
+                    >
+                      {isSavingProduct ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>جاري الحفظ والمزامنة السحابية...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>{editingProductId ? 'حفظ التعديلات سحابياً' : 'إضافة الصنف وحفظه سحابياً'}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* 4. MODULE: CLEANUP & WIPE (تنظيف وتصفية المخزون) */}
+            {activeModule === 'cleanup' && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-6">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                      <SlidersHorizontal className="w-5 h-5 text-amber-400" />
+                      <span>إدارة وتصفية المخزون (خيارات الحذف والتنظيف السحابي)</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      خيارات إزالة الأصناف غير المتوفرة أو مسح الكتالوج بالكامل للبدء على بياض بانتقائية
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Option 1: Remove unavailable */}
+                    <div className="p-5 bg-slate-850 border border-amber-500/30 rounded-2xl space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                          <Trash2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white">إزالة الأصناف غير المتاحة بالصيدلية</h4>
+                          <span className="text-[11px] text-amber-300">
+                            عدد الأصناف غير المتوفرة حالياً: {unavailableCount} صنف
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        يمسح فورياً كافة الأدوية المنتهية من المخزون أو غير المتوفرة، ويحذفها سحابياً من سوبابيس وفايربيس، ليبقى المتجر عارضاً للأصناف المتوفرة فقط.
+                      </p>
                       <button
                         type="button"
-                        onClick={() => setIsStudioOpen(true)}
-                        className="px-4 py-2 bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 hover:from-cyan-500 text-white rounded-xl font-bold text-xs shadow-md flex items-center gap-2 active:scale-95"
+                        onClick={() => setIsConfirmingRemoveUnavailable(true)}
+                        disabled={unavailableCount === 0 || isActionInProgress}
+                        className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow"
                       >
-                        <Camera className="w-4 h-4" />
-                        <span>كاميرا ستوديو جيميناي</span>
+                        إزالة كافة الأصناف غير المتوفرة ({unavailableCount})
                       </button>
-
-                      <label className="cursor-pointer px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold text-xs shadow-md flex items-center gap-2 active:scale-95 transition-colors">
-                        <Upload className="w-4 h-4 text-cyan-400" />
-                        <span>رفع من الجهاز</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = (ev) => {
-                                const res = ev.target?.result as string;
-                                if (res) setImage(res);
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                            e.target.value = '';
-                          }}
-                        />
-                      </label>
                     </div>
+
+                    {/* Option 2: Total Wipe Catalog */}
+                    <div className="p-5 bg-slate-850 border border-rose-500/30 rounded-2xl space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
+                          <AlertTriangle className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white">تصفير ومسح كافة الأصناف (للبدء بانتقائية)</h4>
+                          <span className="text-[11px] text-rose-300">إجمالي الأصناف: {products.length} صنف</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        يمسح كافة الأصناف من قاعدة البيانات السحابية (Supabase & Firestore) ومن الجهاز، ويترك المتجر فارغاً تماماً وجاهزاً لإضافة الأصناف التي تختارها أنت فقط.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsConfirmingClearAll(true)}
+                        disabled={products.length === 0 || isActionInProgress}
+                        className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow"
+                      >
+                        مسح كافة الأصناف وتصفير الموقع بالكامل ⚠️
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 5. MODULE: CUSTOMERS & LOYALTY (سجل العملاء والولاء) */}
+            {activeModule === 'customers' && (
+              <div className="animate-in fade-in duration-200">
+                <CustomersManager
+                  customers={customersList}
+                  onUpdateCustomer={(cust) => {
+                    setCustomersList((prev) => prev.map((c) => (c.id === cust.id ? cust : c)));
+                    showToast(`تم تحديث نقاط العميل ${cust.name}`);
+                  }}
+                  onAddCustomer={(cust) => {
+                    setCustomersList((prev) => [cust, ...prev]);
+                    showToast(`تم تسجيل العميل ${cust.name}`);
+                  }}
+                />
+              </div>
+            )}
+
+            {/* 6. MODULE: BROADCAST NOTIFICATIONS (إرسال إشعار وبث عروض) */}
+            {activeModule === 'broadcast' && (
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-6 animate-in fade-in duration-200">
+                <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center">
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-white">إرسال إشعار عام وبث عروض للزبائن</h3>
+                    <p className="text-xs text-slate-400">
+                      يصل هذا التنبيه فورياً لكافة زبائن صيدلية الديب على شاشات هواتفهم وتطبيقاتهم
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSendBroadcast} className="space-y-4 max-w-xl">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">عنوان الإشعار</label>
+                    <input
+                      type="text"
+                      required
+                      value={broadcastTitle}
+                      onChange={(e) => setBroadcastTitle(e.target.value)}
+                      placeholder="مثال: خصم 20% على منتجات العناية بالبشرة"
+                      className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">نص الرسالة</label>
+                    <textarea
+                      required
+                      rows={4}
+                      value={broadcastMsg}
+                      onChange={(e) => setBroadcastMsg(e.target.value)}
+                      placeholder="اكتب تفاصيل العرض أو الإعلان الصيدلي هنا..."
+                      className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none resize-none"
+                    />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+                    disabled={isSendingBroadcast}
+                    className="px-6 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 text-white rounded-xl text-xs font-bold shadow flex items-center gap-2 disabled:opacity-60 transition-all active:scale-95"
                   >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>{editingProductId ? 'حفظ التعديلات سحابياً' : 'إضافة الصنف فوراً للكتالوج'}</span>
+                    {isSendingBroadcast ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>جاري البث للعملاء...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        <span>إرسال وبث التنبيه فوراً</span>
+                      </>
+                    )}
                   </button>
                 </form>
               </div>
+            )}
 
-              {/* Products Table & Search */}
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <h3 className="text-sm font-bold text-white">الأصناف الحالية في الكتالوج ({products.length})</h3>
-                  <input
-                    type="text"
-                    value={productSearchTerm}
-                    onChange={(e) => setProductSearchTerm(e.target.value)}
-                    placeholder="ابحث عن صنف..."
-                    className="px-3.5 py-2 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 outline-none w-full sm:w-64"
-                  />
-                </div>
-
-                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                  {visibleProducts.map((p) => (
-                    <div
-                      key={p.id}
-                      className="p-3 bg-slate-800/70 border border-slate-700/60 rounded-2xl flex items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={p.image}
-                          alt={p.nameAr}
-                          className="w-12 h-12 rounded-xl object-cover border border-slate-700 shrink-0"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div>
-                          <div className="font-bold text-white">{p.nameAr}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">{p.nameEn}</div>
-                          <div className="text-cyan-400 font-black mt-0.5">{p.price} ج.م • {p.points} نقطة</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEditClick(p)}
-                          className="p-2 bg-slate-700 hover:bg-slate-600 text-cyan-300 rounded-xl"
-                          title="تعديل"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm(`هل تريد حذف صنف "${p.nameAr}"؟`)) {
-                              onDeleteProduct(p.id);
-                              syncDeleteProductFromFirestore(p.id);
-                            }
-                          }}
-                          className="p-2 bg-rose-900/40 hover:bg-rose-900/80 text-rose-300 rounded-xl"
-                          title="حذف"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {filteredProducts.length > visibleProducts.length && (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                    <p className="text-[11px] text-slate-400">
-                      يتم عرض أول {visibleProducts.length} نتيجة من أصل {filteredProducts.length} صنف.
+            {/* 7. MODULE: CLOUD & BACKUP (السحابة والنسخ الاحتياطي) */}
+            {activeModule === 'cloud' && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {/* Cloud Status Cards */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-6">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                      <Database className="w-5 h-5 text-cyan-400" />
+                      <span>حالة الاتصال السحابي والنسخ الاحتياطي</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      بيانات الصيدلية مخزنة ومحمية على خوادم سحابية فائقة السرعة ومتزامنة لحظياً
                     </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="p-4 bg-slate-850 border border-emerald-500/30 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">قاعدة بيانات Supabase</span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold">
+                          متصل 🟢
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        تخزين الأصناف الضخمة والبحث السريع والطلبات المشفرة
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-slate-850 border border-emerald-500/30 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">سحابة Google Firebase</span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold">
+                          متصل 🟢
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        التحديث اللحظي للعملاء، الإشعارات، والروشتات الطبية
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-slate-850 border border-cyan-500/30 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">الذاكرة المحلية IndexedDB</span>
+                        <span className="text-[10px] bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded-full font-bold">
+                          نشط ⚡
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        كاش محلي عالي السرعة لدعم العمل حتى بدون إنترنت
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-800">
                     <button
                       type="button"
-                      onClick={() => setAdminDisplayLimit((prev) => prev + 100)}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 hover:border-cyan-500/50 rounded-xl text-xs font-bold transition-all"
+                      onClick={handleExportJsonBackup}
+                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-2 transition-colors"
                     >
-                      عرض 100 صنف إضافي ({filteredProducts.length - visibleProducts.length} متبقي)
+                      <Download className="w-4 h-4 text-cyan-400" />
+                      <span>تصدير نسخة احتياطية لكافة الأصناف (ملف JSON)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsDriveModalOpen(true)}
+                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-2 transition-colors"
+                    >
+                      <HardDrive className="w-4 h-4 text-emerald-400" />
+                      <span>ربط ونسخ إلى Google Drive</span>
                     </button>
                   </div>
-                )}
+                </div>
+
+                {/* Permanent GitHub Backup Manager */}
+                <GitHubBackupManager
+                  products={products}
+                  onProductsRestored={(restored) => onBatchImportProducts?.(restored)}
+                />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ================= TAB 3: BROADCAST NOTIFICATIONS ================= */}
-          {activeTab === 'broadcast' && (
-            <div className="max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-amber-400" />
-                  <span>إرسال إشعار فوري وتنبيه لكافة العملاء</span>
-                </h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  يصل الإشعار مباشرة لكافة المتصفحين والمسجلين في صيدلية الديب مع ظهور شارة التنبيه.
-                </p>
-              </div>
-
-              {broadcastSuccess && (
-                <div className="p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs rounded-xl flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>تم إرسال الإشعار بنجاح ومزامنته سحابياً لجميع العملاء!</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSendBroadcast} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">عنوان الإشعار *</label>
-                  <input
-                    type="text"
-                    required
-                    value={broadcastTitle}
-                    onChange={(e) => setBroadcastTitle(e.target.value)}
-                    placeholder="مثال: وصول دفعة جديدة من فيتامين سي والفوارات"
-                    className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">نص الرسالة *</label>
-                  <textarea
-                    required
-                    rows={3}
-                    value={broadcastMsg}
-                    onChange={(e) => setBroadcastMsg(e.target.value)}
-                    placeholder="اكتب تفاصيل التنبيه أو العرض الخاص بالصيدلية..."
-                    className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none resize-none"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 text-white rounded-xl font-bold text-xs shadow-md flex items-center justify-center gap-2"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>بث الإشعار الآن</span>
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* ================= TAB 4: CUSTOMERS & LOYALTY ================= */}
-          {activeTab === 'customers' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
-              <CustomersManager isDarkTheme={true} />
-            </div>
-          )}
-
-          {/* ================= TAB 5: GOOGLE DRIVE CLOUD BACKUP ================= */}
-          {activeTab === 'drive' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6 shadow-xl">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/30 text-sky-400 flex items-center justify-center">
-                    <HardDrive className="w-6 h-6" />
+            {/* 8. MODULE: BRANDING & LOGO (هوية وشعار الصيدلية) */}
+            {activeModule === 'branding' && (
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-6 animate-in fade-in duration-200">
+                <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+                  <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-400 flex items-center justify-center">
+                    <Store className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
-                      <span>النسخ الاحتياطي والمزامنة عبر Google Drive</span>
-                      <span className="text-[10px] bg-sky-950 text-sky-300 border border-sky-800 px-2 py-0.5 rounded-full font-mono font-bold">
-                        Workspace OAuth
-                      </span>
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      حفظ قاعدة بيانات صيدلية الديب (الأدوية، الطلبات، الروشتات، والعملاء) بشكل آمن ومستمر على حساب Google Drive الخاص بك.
-                    </p>
+                    <h3 className="text-base sm:text-lg font-black text-white">تخصيص هوية وشعار صيدلية الديب</h3>
+                    <p className="text-xs text-slate-400">تغيير اللوجو المعروض للعملاء والمزامنة السحابية الفورية</p>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsDriveModalOpen(true)}
-                  className="px-4 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 text-white rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 transition-all active:scale-95"
-                >
-                  <CloudUpload className="w-4 h-4" />
-                  <span>فتح مدير Google Drive والنسخ الاحتياطي</span>
-                </button>
-              </div>
-
-              {/* Data Summary Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-4 bg-slate-800/60 border border-slate-700/60 rounded-2xl text-center">
-                  <div className="text-xs text-slate-400 mb-1">الأدوية والمنتجات</div>
-                  <div className="text-xl font-mono font-black text-sky-400">{products.length}</div>
-                </div>
-                <div className="p-4 bg-slate-800/60 border border-slate-700/60 rounded-2xl text-center">
-                  <div className="text-xs text-slate-400 mb-1">الطلبات المسجلة</div>
-                  <div className="text-xl font-mono font-black text-emerald-400">{getStoredOrders().length}</div>
-                </div>
-                <div className="p-4 bg-slate-800/60 border border-slate-700/60 rounded-2xl text-center">
-                  <div className="text-xs text-slate-400 mb-1">العملاء ونقاط الولاء</div>
-                  <div className="text-xl font-mono font-black text-amber-400">{customersList.length}</div>
-                </div>
-                <div className="p-4 bg-slate-800/60 border border-slate-700/60 rounded-2xl text-center">
-                  <div className="text-xs text-slate-400 mb-1">الروشتات الطبية</div>
-                  <div className="text-xl font-mono font-black text-purple-400">{getStoredPrescriptions().length}</div>
-                </div>
-              </div>
-
-              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-300">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>تم تفعيل تصاريح Google Workspace Drive الرسمية (drive.file و drive.readonly).</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsDriveModalOpen(true)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded-lg text-xs font-bold border border-slate-700"
-                >
-                  استعراض الملفات المحفوظة
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ================= TAB 6: BRANDING & LOGO CLOUD SYNC ================= */}
-          {activeTab === 'branding' && (
-            <div className="space-y-6">
-              {/* Header card */}
-              <div className="p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-sky-950/40 border border-slate-800 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <ImageIcon className="w-5 h-5 text-cyan-400" />
-                    <h2 className="text-lg font-bold text-white">إدارة الهوية البصرية وشعار صيدلية الديب</h2>
-                  </div>
-                  <p className="text-xs text-slate-400">
-                    عند رفع وتحديث اللوجو هنا، يتم حفظه محلياً ومزامنته سحابياً مع قاعدة بيانات Firebase Firestore ليظهر فورياً لجميع العملاء والمتصفحين على مختلف الأجهزة.
-                  </p>
-                </div>
-              </div>
-
-              {/* Logo Management Box */}
-              <div className="p-6 bg-slate-900/90 border border-slate-800 rounded-3xl space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                  {/* Preview Cards */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-slate-300">
-                      معاينة الشعار الحالي (على الخلفية الفاتحة والداكنة):
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-4 bg-white rounded-2xl border border-slate-200 flex flex-col items-center justify-center gap-2 text-center">
-                        <span className="text-[10px] font-bold text-slate-500">خلفية فاتحة (Light Mode)</span>
-                        <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-md p-1 bg-gradient-to-tr from-sky-600 to-blue-700">
-                          <img
-                            src={portalLogo}
-                            alt="Logo Light Preview"
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover rounded-xl bg-white"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 flex flex-col items-center justify-center gap-2 text-center">
-                        <span className="text-[10px] font-bold text-slate-400">خلفية داكنة (Dark Mode)</span>
-                        <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-md p-1 bg-gradient-to-tr from-sky-600 to-blue-700">
-                          <img
-                            src={portalLogo}
-                            alt="Logo Dark Preview"
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover rounded-xl bg-slate-900"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Upload Controls */}
-                  <div className="space-y-4">
-                    <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-3xl cursor-pointer bg-slate-950/40 hover:bg-cyan-950/20 transition-all text-center">
-                      <Upload className="w-8 h-8 text-cyan-400 mb-2" />
-                      <span className="font-bold text-sm text-white mb-1">
-                        انقر لرفع وتحديث شعار الصيدلية
-                      </span>
-                      <span className="text-xs text-slate-400">
-                        يدعم JPG أو PNG أو WebP (يتم ضغطه وتحسينه تلقائياً لسرعة فائقة)
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            try {
-                              const optimized = await optimizeProductImage(file, 512, 512, 0.85);
-                              const logoData = optimized.dataUrl;
-                              setPortalLogo(logoData);
-                              saveStoredLogo(logoData);
-                              await syncSaveLogoToFirestore(logoData);
-                              setPortalLogoSuccess(true);
-                              setTimeout(() => setPortalLogoSuccess(false), 4000);
-                            } catch (err) {
-                              console.error('Logo upload error:', err);
-                              const reader = new FileReader();
-                              reader.onload = async (event) => {
-                                const res = event.target?.result as string;
-                                if (res) {
-                                  setPortalLogo(res);
-                                  saveStoredLogo(res);
-                                  await syncSaveLogoToFirestore(res);
-                                  setPortalLogoSuccess(true);
-                                  setTimeout(() => setPortalLogoSuccess(false), 4000);
-                                }
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }
-                        }}
-                      />
-                    </label>
-
-                    <div className="flex items-center justify-between pt-2">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const defaultUrl = '/eldeeb_pharmacy_logo.jpg';
-                          setPortalLogo(defaultUrl);
-                          saveStoredLogo(null);
-                          await syncSaveLogoToFirestore(null);
-                          setPortalLogoSuccess(true);
-                          setTimeout(() => setPortalLogoSuccess(false), 4000);
-                        }}
-                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>استعادة الشعار الرسمي الافتراضي</span>
-                      </button>
-
-                      {portalLogoSuccess && (
-                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 animate-in fade-in duration-200">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          <span>تم الحفظ والمزامنة لجميع العملاء سحابياً!</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ================= MODAL: REAL-TIME LIVE EDITOR ("ويمكن التعديل عليها بشكل لحظي") ================= */}
-      <AnimatePresence>
-        {editingApp && liveConfigState && (
-          <div
-            id="live-editor-backdrop"
-            className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-cairo text-right"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 15 }}
-              className="bg-slate-900 border border-cyan-500/50 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]"
-            >
-              {/* Editor Header */}
-              <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-cyan-600/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
-                    <Sliders className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                      <span>التعديل اللحظي: {editingApp.name}</span>
-                      <span className="text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded-full font-bold">
-                        Live Sync
-                      </span>
-                    </h3>
-                    <p className="text-[10px] text-slate-400 font-mono">
-                      Repo: {editingApp.repo} ({editingApp.branch})
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setEditingApp(null)}
-                  className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Sub-Tabs: Visual vs Code */}
-              <div className="px-4 pt-3 bg-slate-900 flex items-center gap-2 border-b border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setEditorSubTab('visual')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
-                    editorSubTab === 'visual'
-                      ? 'bg-cyan-600 text-white'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                  <span>الإعدادات المباشرة (Visual Controls)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setEditorSubTab('code')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
-                    editorSubTab === 'code'
-                      ? 'bg-cyan-600 text-white'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Code2 className="w-3.5 h-3.5" />
-                  <span>محرر الكود JSON اللحظي (Config Code)</span>
-                </button>
-              </div>
-
-              {/* Editor Content Area */}
-              <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-                {liveSaveSuccess && (
-                  <div className="p-3 bg-emerald-950/70 border border-emerald-800 text-emerald-300 text-xs rounded-xl flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                    <span>تم حفظ وتطبيق التعديل لحظياً بنجاح ومزامنته سحابياً على الفرع {editingApp.branch}!</span>
-                  </div>
-                )}
-
-                {editorSubTab === 'visual' ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">اسم النظام/التطبيق</label>
-                        <input
-                          type="text"
-                          value={liveConfigState.appName}
-                          onChange={(e) =>
-                            setLiveConfigState({ ...liveConfigState, appName: e.target.value })
-                          }
-                          className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">رقم الإصدار (Version)</label>
-                        <input
-                          type="text"
-                          value={liveConfigState.version}
-                          onChange={(e) =>
-                            setLiveConfigState({ ...liveConfigState, version: e.target.value })
-                          }
-                          className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 outline-none font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">خط الواتساب الساخن</label>
-                        <input
-                          type="text"
-                          value={liveConfigState.whatsappHotline}
-                          onChange={(e) =>
-                            setLiveConfigState({ ...liveConfigState, whatsappHotline: e.target.value })
-                          }
-                          className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 outline-none font-mono"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">بيئة التشغيل</label>
-                        <select
-                          value={liveConfigState.environment}
-                          onChange={(e) =>
-                            setLiveConfigState({
-                              ...liveConfigState,
-                              environment: e.target.value as 'production' | 'staging',
-                            })
-                          }
-                          className="w-full px-3.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 outline-none"
-                        >
-                          <option value="production">Production (إنتاج حي ومباشر)</option>
-                          <option value="staging">Staging (بيئة اختبار)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Feature Toggles */}
-                    <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-3">
-                      <h4 className="text-xs font-bold text-white">الميزات اللحظية المفعّلة (Live Feature Flags):</h4>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={liveConfigState.features.aiPrescriptions}
-                            onChange={(e) =>
-                              setLiveConfigState({
-                                ...liveConfigState,
-                                features: { ...liveConfigState.features, aiPrescriptions: e.target.checked },
-                              })
-                            }
-                            className="rounded text-cyan-600"
-                          />
-                          <span>ماسح الروشتات بالذكاء الاصطناعي</span>
-                        </label>
-
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={liveConfigState.features.vespaDelivery}
-                            onChange={(e) =>
-                              setLiveConfigState({
-                                ...liveConfigState,
-                                features: { ...liveConfigState.features, vespaDelivery: e.target.checked },
-                              })
-                            }
-                            className="rounded text-cyan-600"
-                          />
-                          <span>أنيميشن موتوسيكل السباق وصيدلية الديب 🏍️💨</span>
-                        </label>
-
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={liveConfigState.features.realtimeSync}
-                            onChange={(e) =>
-                              setLiveConfigState({
-                                ...liveConfigState,
-                                features: { ...liveConfigState.features, realtimeSync: e.target.checked },
-                              })
-                            }
-                            className="rounded text-cyan-600"
-                          />
-                          <span>المزامنة السحابية اللحظية مع Firestore</span>
-                        </label>
-
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={liveConfigState.features.pushNotifications}
-                            onChange={(e) =>
-                              setLiveConfigState({
-                                ...liveConfigState,
-                                features: { ...liveConfigState.features, pushNotifications: e.target.checked },
-                              })
-                            }
-                            className="rounded text-cyan-600"
-                          />
-                          <span>الإشعارات الفورية للعملاء</span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* Code JSON View */
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold text-slate-300">
-                      محرر JSON لإعدادات النظام المباشرة:
-                    </label>
-                    <textarea
-                      rows={12}
-                      value={liveConfigState.rawConfigJson}
-                      onChange={(e) =>
-                        setLiveConfigState({ ...liveConfigState, rawConfigJson: e.target.value })
-                      }
-                      className="w-full p-3 bg-slate-950 text-cyan-300 font-mono text-xs rounded-2xl border border-slate-800 focus:border-cyan-500 outline-none resize-none leading-relaxed"
-                      spellCheck={false}
+                <div className="flex flex-col sm:flex-row items-center gap-6 max-w-xl">
+                  <div className="w-24 h-24 rounded-2xl bg-white p-2 border-2 border-slate-700 shadow-lg flex items-center justify-center shrink-0">
+                    <img
+                      src={portalLogo}
+                      alt="لوجو صيدلية الديب"
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/eldeeb_pharmacy_logo.jpg';
+                      }}
                     />
                   </div>
-                )}
+
+                  <div className="flex-1 w-full space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">رابط الشعار المباشر (URL):</label>
+                      <input
+                        type="text"
+                        value={portalLogo}
+                        onChange={(e) => setPortalLogo(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-slate-800 text-white rounded-xl text-xs border border-slate-700 focus:border-cyan-500 outline-none font-mono"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPortalLogo('/eldeeb_pharmacy_logo.jpg')}
+                        className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-[11px] font-bold hover:bg-slate-700"
+                      >
+                        اللوجو الافتراضي
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveLogo}
+                        disabled={isSavingLogo}
+                        className="px-5 py-2 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 text-white rounded-xl text-xs font-bold shadow flex items-center gap-1.5 transition-all"
+                      >
+                        {isSavingLogo ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        <span>حفظ الشعار سحابياً</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
+            )}
+          </>
+        )}
+      </main>
 
-              {/* Editor Footer Actions */}
-              <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
+      {/* CONFIRMATION DIALOG: DELETE SINGLE PRODUCT */}
+      <AnimatePresence>
+        {confirmDeleteId && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-slate-900 border border-rose-500/40 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">تأكيد حذف الصنف</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  سيتم حذف هذا الصنف ومزامنته سحابياً فورياً من قواعد بيانات Supabase و Firestore.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setEditingApp(null)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-700"
                 >
-                  إغلاق
+                  إلغاء
                 </button>
-
                 <button
                   type="button"
-                  disabled={isLiveSaving}
-                  onClick={handleApplyLiveConfig}
-                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                  onClick={() => handleExecuteDelete(confirmDeleteId)}
+                  disabled={isActionInProgress}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg"
                 >
-                  {isLiveSaving ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4" />
-                  )}
-                  <span>{isLiveSaving ? 'جاري المزامنة مع GitHub...' : 'حفظ وتطبيق التعديل لحظياً'}</span>
+                  {isActionInProgress ? 'جاري الحذف...' : 'نعم، احذف الصنف'}
                 </button>
               </div>
             </motion.div>
@@ -2270,216 +2007,145 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Gemini Studio Camera Modal */}
+      {/* CONFIRMATION DIALOG: REMOVE UNAVAILABLE */}
+      <AnimatePresence>
+        {isConfirmingRemoveUnavailable && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-slate-900 border border-amber-500/40 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">إزالة كافة الأصناف غير المتوفرة</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  سيتم حذف {unavailableCount} صنف غير متوفر من المخزون والسحابة فوراً.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingRemoveUnavailable(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-700"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteRemoveUnavailable}
+                  disabled={isActionInProgress}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"
+                >
+                  {isActionInProgress ? 'جاري الإزالة...' : 'تأكيد إزالة غير المتوفر'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* CONFIRMATION DIALOG: CLEAR ALL PRODUCTS */}
+      <AnimatePresence>
+        {isConfirmingClearAll && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-slate-900 border border-rose-500/60 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl text-center"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">مسح كافة الأصناف وتصفير الموقع؟</h3>
+                <p className="text-xs text-rose-300/90 mt-2 leading-relaxed">
+                  تحذير: سيتم حذف جميع الأصناف البالغ عددها ({products.length}) صنفاً من السحابة (Supabase و Firestore) ومن الموقع تماماً ليبقى الكتالوج فارغاً وجاهزاً للبدء بانتقائية.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingClearAll(false)}
+                  className="px-5 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-700"
+                >
+                  إلغاء التراجع
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteClearAll}
+                  disabled={isActionInProgress}
+                  className="px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/30"
+                >
+                  {isActionInProgress ? 'جاري التصفير السحابي...' : 'نعم، امسح كل شيء الآن'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* EXCEL / CSV IMPORTER MODAL */}
+      <AnimatePresence>
+        {isExcelModalOpen && (
+          <ExcelProductImporter
+            isOpen={isExcelModalOpen}
+            existingProducts={products}
+            currentProducts={products}
+            onImportComplete={async (imported, mode) => {
+              if (onBatchImportProducts) {
+                await onBatchImportProducts(imported);
+              }
+              setIsExcelModalOpen(false);
+              showToast(`تم استيراد ${imported.length} صنف وحفظها سحابياً بنجاح!`);
+              setActiveModule('products');
+            }}
+            onClose={() => setIsExcelModalOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* GOOGLE DRIVE MODAL */}
+      <AnimatePresence>
+        {isDriveModalOpen && (
+          <GoogleDriveModal
+            isOpen={isDriveModalOpen}
+            products={products}
+            customers={customersList}
+            onClose={() => setIsDriveModalOpen(false)}
+            onRestoreProducts={(restored) => {
+              if (onBatchImportProducts) {
+                onBatchImportProducts(restored);
+              }
+              showToast('تمت استعادة الأصناف من Google Drive بنجاح');
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* GEMINI PRODUCT CAMERA STUDIO */}
       {isStudioOpen && (
         <GeminiProductStudio
-          onCancel={() => setIsStudioOpen(false)}
-          onImageEnhanced={(url) => {
-            setImage(url);
+          isOpen={isStudioOpen}
+          productName={nameAr || 'صنف دوائي'}
+          initialImage={image}
+          autoStartCamera={true}
+          onApplyImage={(generatedUrl) => {
+            setImage(generatedUrl);
             setIsStudioOpen(false);
+            showToast('تم تطبيق الصورة من استوديو الكاميرا بنجاح!');
           }}
-        />
-      )}
-
-      {/* Google Drive Cloud Modal */}
-      {isDriveModalOpen && (
-        <GoogleDriveModal
-          isOpen={isDriveModalOpen}
-          onClose={() => setIsDriveModalOpen(false)}
-          products={products}
-          orders={getStoredOrders()}
-          customers={customersList}
-          prescriptions={getStoredPrescriptions()}
-        />
-      )}
-
-      {/* Full Safety & All Changes Confirmed Modal */}
-      <AnimatePresence>
-        {showSafetyModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-slate-900 border border-emerald-500/40 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative overflow-hidden space-y-5"
-            >
-              {/* Subtle top glow */}
-              <div className="absolute top-0 right-0 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-              {/* Modal Header */}
-              <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center justify-center shrink-0 shadow-inner">
-                    <ShieldCheck className="w-7 h-7" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base sm:text-lg font-bold text-white">
-                        تأكيد أمان وحفظ كافة التغييرات السابقة
-                      </h3>
-                      {/* Pulse badge */}
-                      <span className="relative flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                      </span>
-                    </div>
-                    <p className="text-xs text-emerald-400 font-semibold mt-0.5">
-                      100% All Systems Verified & Safely Stored
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowSafetyModal(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Status List with Real-Time Verification Checks */}
-              <div className="space-y-2.5 text-xs">
-                {/* 1. Firestore DB */}
-                <div className="p-3 rounded-2xl bg-slate-800/80 border border-emerald-500/20 flex items-start gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="font-bold text-white flex items-center justify-between">
-                      <span>قاعدة بيانات Google Cloud Firestore</span>
-                      <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono">
-                        متزامنة لحظياً
-                      </span>
-                    </div>
-                    <div className="text-slate-400 text-[11px] mt-0.5">
-                      قاعدة البيانات السحابية المركزية متصلة وتستقبل أي إضافات أو تعديلات بشكل فوري.
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Product Catalog */}
-                <div className="p-3 rounded-2xl bg-slate-800/80 border border-emerald-500/20 flex items-start gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="font-bold text-white flex items-center justify-between">
-                      <span>كتالوج ومخزون الأدوية</span>
-                      <span className="text-[10px] text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-500/30 font-mono">
-                        {products.length} صنف مؤمن
-                      </span>
-                    </div>
-                    <div className="text-slate-400 text-[11px] mt-0.5">
-                      جميع الأصناف والأسعار والصور محفوظة محلياً ومزامنة في قاعدة البيانات.
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. GitHub Repository */}
-                <div className="p-3 rounded-2xl bg-slate-800/80 border border-emerald-500/20 flex items-start gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="font-bold text-white flex items-center justify-between">
-                      <span>مستودع GitHub والنسخ الاحتياطي الدائم</span>
-                      <span className="text-[10px] text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-500/30 font-mono" dir="ltr">
-                        {getGitHubBackupConfig().repo || 'mohamedghazawy04-droid/Eldeep'}
-                      </span>
-                    </div>
-                    <div className="text-slate-400 text-[11px] mt-0.5">
-                      تم تفعيل التطهير التلقائي للرموز وإتاحة إنشاء رمز دائم بدون انتهاء صلاحية.
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Admin Auth & Email */}
-                <div className="p-3 rounded-2xl bg-slate-800/80 border border-emerald-500/20 flex items-start gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="font-bold text-white flex items-center justify-between">
-                      <span>بريد الإدارة المعتمد وصلاحيات التحكم</span>
-                      <span className="text-[10px] text-sky-400 bg-sky-950/80 px-2 py-0.5 rounded-full border border-sky-500/30 font-mono" dir="ltr">
-                        mohamedghazawy04@gmail.com
-                      </span>
-                    </div>
-                    <div className="text-slate-400 text-[11px] mt-0.5">
-                      حساب الإدارة والبريد المعتمد محمي ومربوط بكافة صلاحيات لوحة التحكم.
-                    </div>
-                  </div>
-                </div>
-
-                {/* 5. Verification Codes & Arabic numbers */}
-                <div className="p-3 rounded-2xl bg-slate-800/80 border border-emerald-500/20 flex items-start gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="font-bold text-white flex items-center justify-between">
-                      <span>أكواد التحقق والتأكيد (Verification Codes)</span>
-                      <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono">
-                        صالحة 24 ساعة
-                      </span>
-                    </div>
-                    <div className="text-slate-400 text-[11px] mt-0.5">
-                      تم تمديد صلاحية كود التأكيد لـ 24 ساعة مع دعم كامل لإدخال الأرقام العربية والإنجليزية بدون أي أخطاء.
-                    </div>
-                  </div>
-                </div>
-
-                {/* 6. Pharmacy Logo & Branding */}
-                <div className="p-3 rounded-2xl bg-slate-800/80 border border-emerald-500/20 flex items-start gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="font-bold text-white flex items-center justify-between">
-                      <span>هوية وشعار الصيدلية (Branding)</span>
-                      <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono">
-                        محفوظ سحابياً
-                      </span>
-                    </div>
-                    <div className="text-slate-400 text-[11px] mt-0.5">
-                      شعار وهوية الصيدلية مثبت في السحابة ويظهر لجميع العملاء فور فتح التطبيق.
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowSafetyModal(false)}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-colors"
-                >
-                  إغلاق النافذة
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isVerifyingAll}
-                  onClick={handleVerifyAllChanges}
-                  className="relative px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-xl text-xs font-black shadow-lg shadow-emerald-950/50 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 animate-pulse hover:animate-none"
-                >
-                  {isVerifyingAll ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 text-slate-950" />
-                  )}
-                  <span>
-                    {isVerifyingAll
-                      ? 'جارٍ الفحص الشامل...'
-                      : verifyAllDone
-                      ? 'تم تأكيد وحفظ كافة التغييرات بنجاح!'
-                      : 'إعادة الفحص وتأكيد التزامن الآن'}
-                  </span>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Excel / CSV Large-Scale Pharmacy Inventory Importer Modal */}
-      {isExcelModalOpen && (
-        <ExcelProductImporter
-          isOpen={isExcelModalOpen}
-          onClose={() => setIsExcelModalOpen(false)}
-          existingProducts={products}
-          currentProducts={products}
-          onImportComplete={handleExcelImportComplete}
+          onImageEnhanced={(generatedUrl) => {
+            setImage(generatedUrl);
+            setIsStudioOpen(false);
+            showToast('تم تطبيق الصورة من استوديو الكاميرا بنجاح!');
+          }}
+          onClose={() => setIsStudioOpen(false)}
+          onCancel={() => setIsStudioOpen(false)}
         />
       )}
     </div>

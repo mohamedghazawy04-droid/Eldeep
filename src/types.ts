@@ -83,6 +83,8 @@ export interface OrderRecord {
   customerAddress: string;
   items: { productName: string; quantity: number; price: number }[];
   totalPrice: number;
+  deliveryFee?: number;
+  estimatedDistanceKm?: number;
   discount: number;
   pointsUsed: number;
   pointsEarned: number;

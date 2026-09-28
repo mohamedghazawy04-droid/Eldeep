@@ -21,12 +21,14 @@ import {
   Award,
   ExternalLink,
   Copy,
+  Truck,
 } from 'lucide-react';
 import { CartItem, Customer, PaymentMethod } from '../types';
 import { createOrderWhatsAppUrl, openWhatsApp } from '../services/whatsapp';
 import { saveOrder, saveCustomer, getStoredAllCustomers } from '../services/storage';
 import { syncSaveOrderToFirestore, syncSaveCustomerToFirestore } from '../services/firestoreSync';
 import { upsertSupabaseCustomer, upsertSupabaseOrder } from '../services/supabaseCustomers';
+import { calculateDeliveryFeeFromAddress } from '../utils/deliveryCalculator';
 import confetti from 'canvas-confetti';
 
 interface CartDrawerProps {
@@ -141,15 +143,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     )
   );
 
+  // Delivery Fee calculation based on address kilometers (min 10 EGP, max 50 EGP)
+  const deliveryInfo = calculateDeliveryFeeFromAddress(customerAddress);
+  const deliveryFee = deliveryInfo.deliveryFee;
+  const estimatedDistanceKm = deliveryInfo.distanceKm;
+
   // Points redemption calculation: 1 point = 1 EGP discount
+  // User rule: When the customer consumes loyalty points, their prior balance is wiped out completely (0) and starts fresh!
   const availablePoints = currentCustomer?.points || 0;
   const maxPossibleDiscount = Math.min(subtotal, Math.floor(availablePoints));
   const pointsDiscount = usePoints ? maxPossibleDiscount : 0;
-  const pointsToDeduct = usePoints ? pointsDiscount : 0;
-  const finalTotal = Math.max(0, subtotal - pointsDiscount);
-  const remainingPointsAfterOrder = currentCustomer
-    ? Math.max(0, currentCustomer.points - pointsToDeduct)
-    : 0;
+  const pointsToDeduct = usePoints ? availablePoints : 0;
+  const finalTotal = Math.max(0, subtotal + deliveryFee - pointsDiscount);
+  const remainingPointsAfterOrder = usePoints ? 0 : (currentCustomer?.points || 0);
 
   const validateForm = () => {
     const newErrors: { name?: string; phone?: string; address?: string } = {};
@@ -208,6 +214,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         price: i.product.price,
       })),
       totalPrice: finalTotal,
+      deliveryFee,
+      estimatedDistanceKm,
       discount: pointsDiscount,
       pointsUsed: pointsToDeduct,
       pointsEarned: totalEarnedPoints,
@@ -227,10 +235,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     syncSaveOrderToFirestore(newOrder);
     upsertSupabaseOrder(newOrder).catch(() => {});
 
-    // Update customer points: strictly deduct used points and credit newly earned points
+    // Update customer points: strictly delete all prior points if consumed, start counting fresh from 0!
     let updatedCustomerObj: Customer;
     if (currentCustomer) {
-      const remainingBase = Math.max(0, currentCustomer.points - pointsToDeduct);
+      const remainingBase = usePoints ? 0 : currentCustomer.points;
       updatedCustomerObj = {
         ...currentCustomer,
         name: customerName.trim(),
@@ -258,7 +266,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     upsertSupabaseCustomer(updatedCustomerObj).catch(() => {});
     onCustomerUpdated?.(updatedCustomerObj);
 
-    // Launch WhatsApp with detailed loyalty points audit
+    // Launch WhatsApp with detailed loyalty points audit and delivery fee breakdown
     const waUrl = createOrderWhatsAppUrl({
       items,
       customer: {
@@ -269,10 +277,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       pointsDiscount,
       earnedPoints: totalEarnedPoints,
       pointsUsed: pointsToDeduct,
-      remainingPoints: currentCustomer ? remainingPointsAfterOrder : undefined,
+      remainingPoints: remainingPointsAfterOrder,
       previousPoints: currentCustomer?.points,
       paymentMethod,
       notes: orderNotes.trim(),
+      deliveryFee,
+      distanceKm: estimatedDistanceKm,
     });
 
     setIsOrdered(true);
@@ -539,9 +549,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </label>
 
                       {usePoints && (
-                        <div className="p-2 bg-emerald-100/70 dark:bg-emerald-950/60 rounded-xl text-[11px] text-emerald-900 dark:text-emerald-200 font-semibold flex items-center justify-between border border-emerald-300/70">
-                          <span>✅ سيتم خصم {pointsToDeduct} نقطة من حسابك</span>
-                          <span>الرصيد المتبقي: {remainingPointsAfterOrder} نقطة</span>
+                        <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl text-[11px] text-amber-900 dark:text-amber-200 font-semibold border border-amber-300/70 space-y-1">
+                          <div className="flex items-center justify-between font-bold">
+                            <span>⚡ تم استهلاك وحذف رصيد النقاط بالكامل:</span>
+                            <span className="font-mono text-rose-600 dark:text-rose-400">-{availablePoints} نقطة</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-600 dark:text-slate-300">
+                            <span>الرصيد الجديد يبدأ من الصفر + نقاط هذا الطلب:</span>
+                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">+{totalEarnedPoints} نقطة</span>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -621,10 +637,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       required
                       value={customerName}
                       onChange={(e) => handleNameChange(e.target.value)}
-                      placeholder="مثال: أحمد محمد علي"
+                      placeholder="XXXX XXXX (الاسم بالكامل)"
                       className={`w-full px-3 py-2.5 rounded-xl text-xs font-medium outline-none transition-all ${
                         errors.name
-                          ? 'border-2 border-rose-500 bg-rose-50/80 dark:bg-rose-950/50 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/20'
+                           ? 'border-2 border-rose-500 bg-rose-50/80 dark:bg-rose-950/50 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/20'
                           : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:border-sky-500'
                       }`}
                     />
@@ -658,7 +674,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       required
                       value={customerPhone}
                       onChange={(e) => handlePhoneChange(e.target.value)}
-                      placeholder="مثال: 01012345678"
+                      placeholder="01xxxxxxxxx"
                       className={`w-full px-3 py-2.5 rounded-xl text-xs font-medium outline-none transition-all ${
                         errors.phone
                           ? 'border-2 border-rose-500 bg-rose-50/80 dark:bg-rose-950/50 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/20'
@@ -679,7 +695,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   )}
                 </div>
 
-                {/* Address Input */}
+                {/* Address Input & Automatic Delivery Calculation */}
                 <div>
                   <label className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     <span className="flex items-center gap-1">
@@ -695,7 +711,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       required
                       value={customerAddress}
                       onChange={(e) => handleAddressChange(e.target.value)}
-                      placeholder="المنطقة، الشارع، رقم العمارة، الدور أو علامة مميزة"
+                      placeholder="XXXX (المنطقة، الشارع، رقم العمارة، الدور أو علامة مميزة)"
                       className={`w-full px-3 py-2.5 rounded-xl text-xs font-medium outline-none transition-all ${
                         errors.address
                           ? 'border-2 border-rose-500 bg-rose-50/80 dark:bg-rose-950/50 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/20'
@@ -714,6 +730,38 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <span>{errors.address}</span>
                     </p>
                   )}
+
+                  {/* Live Distance & Delivery Fee Calculator Display */}
+                  <div className="mt-2.5 p-3 rounded-2xl border border-sky-200/90 dark:border-sky-800/80 bg-sky-50/70 dark:bg-sky-950/40 space-y-2 transition-all">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <Truck className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                        <span>حساب التوصيل الذكي بالكيلومترات:</span>
+                      </span>
+                      <span className="text-xs font-black text-sky-700 dark:text-sky-300 font-mono bg-white dark:bg-slate-900 px-2.5 py-1 rounded-xl border border-sky-300/60 dark:border-sky-700 shadow-xs">
+                        +{deliveryFee} ج.م
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                      <div className="bg-white/80 dark:bg-slate-900/80 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">المسافة التقديرية</span>
+                        <strong className="font-mono text-slate-900 dark:text-white font-bold">~{estimatedDistanceKm} كم</strong>
+                        <span className="text-[9px] text-slate-500 block truncate">({deliveryInfo.zoneDescription})</span>
+                      </div>
+
+                      <div className="bg-white/80 dark:bg-slate-900/80 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">وقت الوصول المتوقع</span>
+                        <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{deliveryInfo.estimatedMinutes}</strong>
+                        <span className="text-[9px] text-slate-500 block">دليفري صيدلية الديب</span>
+                      </div>
+                    </div>
+
+                    <div className="text-[10px] text-slate-400 dark:text-slate-400 flex items-center justify-between border-t border-sky-200/60 dark:border-sky-900/60 pt-1.5 px-0.5">
+                      <span>تسعيرة المسافة الرسمية:</span>
+                      <span className="font-bold text-sky-600 dark:text-sky-400 font-mono">حد أدنى 10 ج.م • حد أقصى 50 ج.م</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -800,6 +848,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="flex justify-between">
                 <span>إجمالي الأصناف:</span>
                 <span className="font-bold text-slate-900 dark:text-white font-mono">{subtotal} ج.م</span>
+              </div>
+              <div className="flex justify-between text-sky-700 dark:text-sky-300 font-medium">
+                <span className="flex items-center gap-1">
+                  <Truck className="w-3.5 h-3.5 text-sky-500" />
+                  <span>خدمة التوصيل (~{estimatedDistanceKm} كم):</span>
+                </span>
+                <span className="font-bold font-mono">+{deliveryFee} ج.م</span>
               </div>
               {pointsDiscount > 0 && (
                 <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-bold">

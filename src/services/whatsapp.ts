@@ -18,6 +18,8 @@ export interface WhatsAppOrderDetails {
   previousPoints?: number;
   paymentMethod?: PaymentMethod;
   notes?: string;
+  deliveryFee?: number;
+  distanceKm?: number;
 }
 
 /**
@@ -30,7 +32,7 @@ export function createOrderWhatsAppUrl(
   earnedPoints?: number,
   paymentMethod: PaymentMethod = 'cash',
   notes?: string,
-  extraPointsInfo?: { pointsUsed?: number; remainingPoints?: number; previousPoints?: number }
+  extraPointsInfo?: { pointsUsed?: number; remainingPoints?: number; previousPoints?: number; deliveryFee?: number; distanceKm?: number }
 ): string {
   let items: CartItem[];
   let customer: Partial<Customer>;
@@ -41,6 +43,8 @@ export function createOrderWhatsAppUrl(
   let pointsUsed = 0;
   let remainingPoints: number | undefined;
   let previousPoints: number | undefined;
+  let deliveryFee = 0;
+  let distanceKm: number | undefined;
 
   // Support both object signature and positional signature
   if (Array.isArray(itemsOrDetails)) {
@@ -54,6 +58,8 @@ export function createOrderWhatsAppUrl(
       pointsUsed = extraPointsInfo.pointsUsed || 0;
       remainingPoints = extraPointsInfo.remainingPoints;
       previousPoints = extraPointsInfo.previousPoints;
+      deliveryFee = extraPointsInfo.deliveryFee || 0;
+      distanceKm = extraPointsInfo.distanceKm;
     }
   } else {
     const d = itemsOrDetails;
@@ -66,18 +72,23 @@ export function createOrderWhatsAppUrl(
     previousPoints = d.previousPoints;
     method = d.paymentMethod || 'cash';
     orderNotes = d.notes || '';
+    deliveryFee = d.deliveryFee || 0;
+    distanceKm = d.distanceKm;
   }
 
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const total = Math.max(0, subtotal - pointsDiscount);
+  const total = Math.max(0, subtotal + deliveryFee - pointsDiscount);
 
   let message = `🏥 *طلب أدوية ومستلزمات جديدة - صيدلية الديب*\n`;
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   message += `👤 *بيانات العميل والتوصيل:*\n`;
-  message += `• الاسم: ${customer.name || 'عميل كريم'}\n`;
-  message += `• رقم الهاتف: ${customer.phone || 'غير مسجل'}\n`;
+  message += `• الاسم: ${customer.name?.trim() || 'XXXX XXXX'}\n`;
+  message += `• رقم الهاتف: ${customer.phone?.trim() || '01xxxxxxxxx'}\n`;
   if (customer.address) {
-    message += `• عنوان التوصيل: ${customer.address}\n`;
+    message += `• عنوان التوصيل: ${customer.address.trim()}\n`;
+  }
+  if (distanceKm) {
+    message += `• المسافة التقديرية: ~${distanceKm} كم\n`;
   }
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   message += `🛒 *محتويات الطلب:*\n`;
@@ -91,29 +102,30 @@ export function createOrderWhatsAppUrl(
   message += `💳 *طريقة الدفع المختارة:*\n`;
   message += `• ${PAYMENT_METHOD_LABELS[method] || method}\n`;
 
-  // Loyalty points section
+  // Loyalty points section (points fully reset upon redemption)
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   if (pointsDiscount > 0 || pointsUsed > 0) {
-    message += `🌟 *نظام نقاط الولاء والمكافآت (تم تطبيق الخصم):*\n`;
+    message += `🌟 *نظام نقاط الولاء والمكافآت (تم استهلاك النقاط وتصفير الحساب):*\n`;
     if (previousPoints !== undefined) {
       message += `• رصيد النقاط قبل الطلب: ${previousPoints} نقطة\n`;
     }
-    message += `• النقاط المخصومة من الحساب: -${pointsUsed || pointsDiscount} نقطة\n`;
+    message += `• تم حذف واستهلاك الرصيد السابق بالكامل: -${previousPoints !== undefined ? previousPoints : pointsUsed} نقطة\n`;
     message += `• قيمة الخصم المباشر: -${pointsDiscount} جنيه مصري\n`;
-    if (remainingPoints !== undefined) {
-      message += `• رصيد النقاط المتبقي بحسابك: ${remainingPoints} نقطة\n`;
-    }
-    message += `• نقاط إضافية مكتسبة من الطلب: +${pointsEarned} نقطة\n`;
+    message += `• رصيد نقاطك الجديد (بدأ التجميع من الصفر): ${pointsEarned} نقطة\n`;
   } else {
     message += `🎁 *نقاط الولاء المكتسبة من هذا الطلب: +${pointsEarned} نقطة*\n`;
     if (previousPoints !== undefined) {
       message += `• رصيد نقاطك الحالي المحفوظ: ${previousPoints} نقطة\n`;
+      message += `• الرصيد الإجمالي بعد الطلب: ${(previousPoints + pointsEarned).toFixed(1)} نقطة\n`;
     }
   }
 
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   message += `💰 *الحساب الإجمالي للفاتورة:*\n`;
   message += `• إجمالي المنتجات: ${subtotal} جنيه\n`;
+  if (deliveryFee > 0) {
+    message += `• خدمة التوصيل والدليفري (${distanceKm ? distanceKm + ' كم' : 'حسب المسافة'}): +${deliveryFee} جنيه\n`;
+  }
   if (pointsDiscount > 0) {
     message += `• خصم نقاط الولاء: -${pointsDiscount} جنيه\n`;
   }
@@ -144,9 +156,9 @@ export function createPrescriptionMessageText(
   let message = `🩺 *روشتة طبية جديدة مرسلة من الموقع - صيدلية الديب*\n`;
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   message += `👤 *بيانات المريض / العميل:*\n`;
-  message += `• الاسم: ${customerName}\n`;
-  message += `• الهاتف: ${customerPhone}\n`;
-  message += `• العنوان: ${customerAddress || 'سيتم التوضيح مع الصيدلي'}\n`;
+  message += `• الاسم: ${customerName?.trim() || 'XXXX XXXX'}\n`;
+  message += `• الهاتف: ${customerPhone?.trim() || '01xxxxxxxxx'}\n`;
+  message += `• العنوان: ${customerAddress?.trim() || 'XXXX'}\n`;
   message += `━━━━━━━━━━━━━━━━━━━━━\n`;
   if (notes && notes.trim()) {
     message += `📋 *ملاحظات المريض أو الأعراض:*\n${notes.trim()}\n`;

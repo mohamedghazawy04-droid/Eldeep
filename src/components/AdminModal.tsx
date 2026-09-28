@@ -46,7 +46,6 @@ import {
   ProductCategory,
 } from '../types';
 import { CATEGORIES } from '../data/initialData';
-import { EZABY_TOP_PRODUCTS } from '../data/ezabyCatalog';
 import { CustomersManager } from './CustomersManager';
 import {
   addBroadcastNotification,
@@ -154,10 +153,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   // Products filter state
   const [stockFilter, setStockFilter] = useState<'all' | 'lowStock' | 'comingSoon' | 'outOfStock'>('all');
   const [productSearch, setProductSearch] = useState('');
-
-  // Ezaby catalog import state
-  const [isImportingEzaby, setIsImportingEzaby] = useState(false);
-  const [ezabyImportFeedback, setEzabyImportFeedback] = useState<string | null>(null);
 
   // Broadcast Message State
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -561,29 +556,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     alert('تمت إزالة الأصناف الوهمية والتجريبية بنجاح!');
   };
 
-  const handleImportEzabyCatalog = async () => {
-    setIsImportingEzaby(true);
-    setEzabyImportFeedback(null);
-    try {
-      if (onBatchImportProducts) {
-        await onBatchImportProducts(EZABY_TOP_PRODUCTS);
-      } else {
-        for (const p of EZABY_TOP_PRODUCTS) {
-          onAddProduct(p);
-          syncAddProductToFirestore(p);
-        }
-      }
-      setEzabyImportFeedback(`✅ تم بنجاح استيراد ${EZABY_TOP_PRODUCTS.length} صنفاً من كتالوج العزبي الأكثر طلباً بالصيدلية وحفظها سحابياً ومحلياً!`);
-      setTimeout(() => setEzabyImportFeedback(null), 8000);
-    } catch (err: any) {
-      console.error('Import failed:', err);
-      setEzabyImportFeedback(`تم استيراد ${EZABY_TOP_PRODUCTS.length} صنفاً بنجاح.`);
-      setTimeout(() => setEzabyImportFeedback(null), 6000);
-    } finally {
-      setIsImportingEzaby(false);
-    }
-  };
-
   const handleSendBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastTitle.trim() || !broadcastMessage.trim()) {
@@ -861,27 +833,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        onClick={handleImportEzabyCatalog}
-                        disabled={isImportingEzaby}
-                        className={`px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-bold text-xs shrink-0 shadow-sm transition-transform active:scale-95 flex items-center gap-1.5 ${
-                          isImportingEzaby ? 'opacity-70 cursor-wait' : ''
-                        }`}
-                        title="تحميل باقة أصناف العزبي الأكثر طلباً ومبيعاً في الصيدليات المصرية"
-                      >
-                        {isImportingEzaby ? (
-                          <RefreshCw className="w-3.5 h-3.5 text-amber-300 animate-spin" />
-                        ) : (
-                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                        )}
-                        <span>
-                          {isImportingEzaby
-                            ? 'جارٍ الاستيراد والحفظ...'
-                            : `استيراد كتالوج العزبي الأكثر طلباً (${EZABY_TOP_PRODUCTS.length})`}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
                         onClick={handleRemoveDemoProducts}
                         className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shrink-0 shadow-sm transition-transform active:scale-95 flex items-center gap-1.5"
                         title="إزالة الأصناف الوهمية والتجريبية والاحتفاظ بالأصناف التي قمت برفعها بنفسك فقط"
@@ -900,13 +851,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                       </button>
                     </div>
                   </div>
-
-                  {ezabyImportFeedback && (
-                    <div className="p-4 bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-600/50 rounded-2xl text-emerald-900 dark:text-emerald-200 text-xs sm:text-sm font-bold flex items-center gap-2.5 animate-fadeIn shadow-sm">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <span>{ezabyImportFeedback}</span>
-                    </div>
-                  )}
 
                   {/* Add / Edit Product Form */}
                   <div className="bg-slate-50 dark:bg-slate-800/40 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-4">
@@ -1743,10 +1687,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         </div>
                         <div className="flex items-center justify-between font-bold pt-1 border-t border-slate-200 dark:border-slate-700">
                           <span className="text-sky-600 dark:text-sky-400">
-                            الإجمالي: {ord.totalAmount} ج.م
+                            الإجمالي: {(ord as any).totalPrice || (ord as any).totalAmount || 0} ج.م
+                            {(ord as any).deliveryFee ? ` (توصيل: ${(ord as any).deliveryFee} ج.م)` : ''}
                           </span>
                           <span className="text-slate-500 text-[10px]">
-                            {ord.deliveryAddress || 'العنوان عبر الواتساب'}
+                            {(ord as any).customerAddress || (ord as any).deliveryAddress || 'العنوان عبر الواتساب'}
                           </span>
                         </div>
                       </div>
@@ -1960,13 +1905,20 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       {/* Gemini Product Studio Camera Modal */}
       {isStudioOpen && (
         <GeminiProductStudio
+          isOpen={isStudioOpen}
           initialImage={image}
+          autoStartCamera={true}
           productName={nameAr || 'صيدلية الديب'}
           onImageEnhanced={(enhancedUrl) => {
             setImage(enhancedUrl);
             setIsStudioOpen(false);
           }}
+          onApplyImage={(enhancedUrl) => {
+            setImage(enhancedUrl);
+            setIsStudioOpen(false);
+          }}
           onCancel={() => setIsStudioOpen(false)}
+          onClose={() => setIsStudioOpen(false)}
         />
       )}
     </div>

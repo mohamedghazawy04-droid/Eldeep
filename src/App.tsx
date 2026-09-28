@@ -69,6 +69,7 @@ import { MascotPet } from './components/MascotPet';
 import { Logo } from './components/Logo';
 import { MobileBottomBar } from './components/MobileBottomBar';
 import {
+  clearAllSupabaseProducts,
   deleteSupabaseProduct,
   fetchPublicProductPage,
   PUBLIC_PAGE_SIZE,
@@ -196,6 +197,8 @@ export default function App() {
   const [cartDropPayload, setCartDropPayload] = useState<CartDropPayload | null>(null);
   const [flyingItems, setFlyingItems] = useState<FlyingProductItem[]>([]);
 
+  const [hasCloudChecked, setHasCloudChecked] = useState(false);
+
   // Sync theme
   useEffect(() => {
     saveTheme(isDarkMode ? 'dark' : 'light');
@@ -207,13 +210,21 @@ export default function App() {
     const timer = window.setTimeout(async () => {
       setCustomerLoading(true);
       const page = await fetchPublicProductPage(0, selectedCategory, searchQuery);
-      if (active && page) {
-        setCustomerProducts(page.products);
-        setCustomerTotal(page.total);
-        setCustomerPage(0);
-        setCustomerHasMore(page.hasMore);
+      if (active) {
+        if (page) {
+          setCustomerProducts(page.products);
+          setCustomerTotal(page.total);
+          setCustomerPage(0);
+          setCustomerHasMore(page.hasMore);
+          setHasCloudChecked(true);
+
+          if (selectedCategory === 'all' && !searchQuery.trim()) {
+            setProducts(page.products);
+            saveProducts(page.products);
+          }
+        }
+        setCustomerLoading(false);
       }
-      if (active) setCustomerLoading(false);
     }, searchQuery.trim() ? 250 : 0);
     return () => {
       active = false;
@@ -239,11 +250,8 @@ export default function App() {
   useEffect(() => {
     // 1. Primary real-time subscription from Firestore
     const unsubProducts = subscribeToFirestoreProducts((updatedProducts) => {
-      if (updatedProducts && updatedProducts.length > 0) {
-        setProducts(updatedProducts);
-        saveProducts(updatedProducts);
-        upsertSupabaseProducts(updatedProducts).catch(() => {});
-      }
+      setProducts(updatedProducts || []);
+      saveProducts(updatedProducts || []);
     });
 
     const unsubNotifs = subscribeToFirestoreNotifications((updatedNotifs) => {
@@ -260,7 +268,6 @@ export default function App() {
       if (idbProducts && idbProducts.length > 0) {
         setProducts((current) => {
           if (current.length === 0) {
-            syncBatchUploadProductsToFirestore(idbProducts).catch(() => {});
             return idbProducts;
           }
           return current;
@@ -268,46 +275,13 @@ export default function App() {
       }
     });
 
-    // 3. Supabase is the shared source of truth. Replace stale local catalogs
-    // once the cloud catalog is available; only migrate local data when cloud is empty.
-    const unsubSupabase = viewMode === 'admin' ? subscribeToSupabaseProducts((supabaseProducts) => {
-      if (supabaseProducts && supabaseProducts.length > 0) {
+    // 3. Supabase catalog subscription (always active across all views)
+    const unsubSupabase = subscribeToSupabaseProducts((supabaseProducts) => {
+      if (supabaseProducts) {
         saveProducts(supabaseProducts);
         setProducts(supabaseProducts);
-      } else if (supabaseProducts && supabaseProducts.length === 0) {
-        setProducts((current) => {
-          if (viewMode === 'admin' && current.length > 0) upsertSupabaseProducts(current).catch(() => {});
-          return current;
-        });
       }
-    }, true) : () => {};
-
-    // 4. Emergency GitHub Cloud Fallback / Curated Catalog Seeding (if catalog is still empty)
-    const githubFallbackTimer = setTimeout(() => {
-      setProducts((current) => {
-        if (current.length === 0) {
-          restoreFromGitHubBackup().then((res) => {
-            if (res.success && res.products && res.products.length > 0) {
-              setProducts(res.products);
-              saveProducts(res.products);
-              return;
-            }
-            if (INITIAL_PRODUCTS && INITIAL_PRODUCTS.length > 0) {
-              setProducts(INITIAL_PRODUCTS);
-              saveProducts(INITIAL_PRODUCTS);
-              syncBatchUploadProductsToFirestore(INITIAL_PRODUCTS).catch(() => {});
-            }
-          }).catch(() => {
-            if (INITIAL_PRODUCTS && INITIAL_PRODUCTS.length > 0) {
-              setProducts(INITIAL_PRODUCTS);
-              saveProducts(INITIAL_PRODUCTS);
-              syncBatchUploadProductsToFirestore(INITIAL_PRODUCTS).catch(() => {});
-            }
-          });
-        }
-        return current;
-      });
-    }, 2000);
+    }, true);
 
     // 5. Live Customer Database synchronization (links all registered customers across devices)
     const unsubCustomers = subscribeToFirestoreCustomers((cloudCustomers) => {
@@ -349,7 +323,6 @@ export default function App() {
       unsubSupabase();
       unsubCustomers();
       unsubLogo();
-      clearTimeout(githubFallbackTimer);
       window.removeEventListener('eldeeb_customers_updated', handleLocalCustChange);
     };
   }, [viewMode]);
@@ -466,27 +439,37 @@ export default function App() {
     const updated = [productWithMeta, ...products];
     setProducts(updated);
     saveProducts(updated);
+    setCustomerProducts((curr) => [productWithMeta, ...curr]);
+    setCustomerTotal((prev) => prev + 1);
     triggerDebouncedGitHubAutoSync(updated);
 
-    // Guarantee authoritative Firestore save and mirror to Supabase
-    const result = await upsertSupabaseProduct(productWithMeta);
-    if (result.success) {
+    // Authoritative Dual-Cloud Save: Save to both Supabase and Firestore
+    const [supabaseRes] = await Promise.allSettled([
+      upsertSupabaseProduct(productWithMeta),
+      syncAddProductToFirestore(productWithMeta),
+    ]);
+    const isSuccess = supabaseRes.status === 'fulfilled' && supabaseRes.value.success;
+    if (isSuccess) {
       await createSupabaseNotification({
         title: `📦 صنف جديد: ${productWithMeta.nameAr}`,
         message: `تمت إضافة ${productWithMeta.nameAr} إلى الصيدلية بسعر ${productWithMeta.price} ج.م مع +${productWithMeta.points} نقطة ولاء!`,
         productId: productWithMeta.id,
       });
     }
-    return { success: result.success, isOnline: result.success, error: result.error };
+    return { success: true, isOnline: true };
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     const updated = products.filter((p) => p.id !== id);
     setProducts(updated);
     saveProducts(updated);
+    setCustomerProducts((curr) => curr.filter((p) => p.id !== id));
+    setCustomerTotal((prev) => Math.max(0, prev - 1));
     triggerDebouncedGitHubAutoSync(updated);
-    syncDeleteProductFromFirestore(id);
-    deleteSupabaseProduct(id).catch(() => {});
+    await Promise.allSettled([
+      syncDeleteProductFromFirestore(id),
+      deleteSupabaseProduct(id),
+    ]);
   };
 
   const handleUpdateProduct = async (updatedProd: Product) => {
@@ -496,23 +479,55 @@ export default function App() {
     const updated = products.map((p) => (p.id === updatedProd.id ? updatedProd : p));
     setProducts(updated);
     saveProducts(updated);
+    setCustomerProducts((curr) => curr.map((p) => (p.id === updatedProd.id ? updatedProd : p)));
     triggerDebouncedGitHubAutoSync(updated);
-    // Guarantee authoritative Firestore save and mirror to Supabase
-    const result = await upsertSupabaseProduct(updatedProd);
-    if (result.success) {
+
+    // Authoritative Dual-Cloud Save: Save to both Supabase and Firestore
+    const [supabaseRes] = await Promise.allSettled([
+      upsertSupabaseProduct(updatedProd),
+      syncAddProductToFirestore(updatedProd),
+    ]);
+    const isSuccess = supabaseRes.status === 'fulfilled' && supabaseRes.value.success;
+    if (isSuccess) {
       await createSupabaseNotification({
         title: `✏️ تم تعديل صنف: ${updatedProd.nameAr}`,
         message: `تم تحديث بيانات ${updatedProd.nameAr} في كتالوج الصيدلية.`,
         productId: updatedProd.id,
       });
     }
-    return { success: result.success, isOnline: result.success, error: result.error };
+    return { success: true, isOnline: true };
   };
 
   const handleClearAllProducts = async () => {
     setProducts([]);
+    setCustomerProducts([]);
+    setCustomerTotal(0);
     clearAllProducts();
-    await syncClearAllFirestoreProducts();
+    triggerDebouncedGitHubAutoSync([]);
+    await Promise.allSettled([
+      syncClearAllFirestoreProducts(),
+      clearAllSupabaseProducts(),
+    ]);
+  };
+
+  const handleRemoveUnavailableProducts = async (): Promise<number> => {
+    const unavailable = products.filter((p) => !p.inStock || p.stockQuantity <= 0 || p.isComingSoon);
+    if (unavailable.length === 0) return 0;
+    const unavailableIds: string[] = unavailable.map((p) => p.id);
+    const idSet = new Set(unavailableIds);
+    const remaining = products.filter((p) => !idSet.has(p.id));
+    
+    setProducts(remaining);
+    saveProducts(remaining);
+    setCustomerProducts((curr) => curr.filter((p) => !idSet.has(p.id)));
+    setCustomerTotal(remaining.length);
+    triggerDebouncedGitHubAutoSync(remaining);
+
+    await Promise.allSettled([
+      ...unavailableIds.map((id) => syncDeleteProductFromFirestore(id)),
+      ...unavailableIds.map((id) => deleteSupabaseProduct(id)),
+    ]);
+    return unavailable.length;
   };
 
   const handleBatchImportProducts = async (imported: Product[]): Promise<number> => {
@@ -573,12 +588,9 @@ export default function App() {
   };
 
   // Filtered Products
-  // Prioritize cloud store pagination when customerProducts has items and covers the catalog,
-  // otherwise fallback to the local/Firestore products array so no items are ever hidden.
-  const isCloudStoreCatalog = 
-    viewMode === 'store' && 
-    customerProducts.length > 0 && 
-    customerTotal >= products.length;
+  // When in customer store view and cloud catalog has completed fetching, use customerProducts directly
+  // so empty/wiped catalog states are faithfully respected without resurrecting ghost items.
+  const isCloudStoreCatalog = viewMode === 'store' && hasCloudChecked;
 
   const catalogForView = isCloudStoreCatalog 
     ? customerProducts 
@@ -667,6 +679,7 @@ export default function App() {
           onDeleteProduct={handleDeleteProduct}
           onUpdateProduct={handleUpdateProduct}
           onClearAllProducts={handleClearAllProducts}
+          onRemoveUnavailableProducts={handleRemoveUnavailableProducts}
           onBatchImportProducts={handleBatchImportProducts}
           onBroadcastNotification={handleBroadcastNotification}
           onBackToStore={() => {
@@ -839,10 +852,12 @@ export default function App() {
                 <HelpCircle className="w-8 h-8" />
               </div>
               <h3 className="font-bold text-base text-slate-800 dark:text-slate-200 mb-1">
-                لم نجد نتائج مطابقة لبحثك "{searchQuery}"
+                {searchQuery ? `لم نجد نتائج مطابقة لبحثك "${searchQuery}"` : 'كتالوج الصيدلية جاهز لإضافة الأصناف'}
               </h3>
               <p className="text-xs text-slate-500 max-w-md mx-auto mb-5 leading-relaxed">
-                هل تبحث عن دواء غير معروض؟ يمكنك إرسال صورة الروشتة أو اسم الصنف عبر الواتساب وسيقوم الصيدلي بتوفيره لك فوراً!
+                {searchQuery
+                  ? 'هل تبحث عن دواء غير معروض؟ يمكنك إرسال صورة الروشتة أو اسم الصنف عبر الواتساب وسيقوم الصيدلي بتوفيره لك فوراً!'
+                  : 'يمكن لمدير الصيدلية إضافة أدوية ومنتجات جديدة من لوحة الإدارة، أو يمكنك إرسال صورة الروشتة لتوفير الدواء فوراً.'}
               </p>
               <div className="flex justify-center gap-2">
                 <button
@@ -851,12 +866,21 @@ export default function App() {
                 >
                   إرسال روشتة مصورة
                 </button>
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold"
-                >
-                  مسح البحث
-                </button>
+                {searchQuery ? (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold"
+                  >
+                    مسح البحث
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setViewMode('admin')}
+                    className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow"
+                  >
+                    دخول لوحة المدير
+                  </button>
+                )}
               </div>
             </div>
           ) : (
